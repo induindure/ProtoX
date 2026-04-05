@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # ProtoX — ProtoIdea
 
 AI-powered application idea generator using **LangChain + Gemini 1.5 Flash + FastAPI + React + TypeScript + Supabase**.
@@ -176,3 +177,7 @@ curl -X POST http://localhost:8000/ideas/generate \
 - [Vite](https://vitejs.dev/) — Frontend build tool
 - [Tailwind CSS](https://tailwindcss.com/) — Styling
 - [TanStack Query](https://tanstack.com/query) — Server state management
+=======
+# ProtoX
+AI-powered multi-agent system for automated web application prototyping (ProtoIdea, ProtoCode, ProtoTest, ProtoDeploy)
+>>>>>>> bf466877d87a5c0467f1669c2ad9be72d5444569
