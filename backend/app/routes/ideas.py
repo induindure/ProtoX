@@ -7,63 +7,79 @@ from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.models.idea_record import IdeaRecord
 from app.models.schemas import IdeaRequest, IdeaResponse, IdeaListResponse
+from app.agents.proto_idea import proto_idea_agent  # ✅ import the real agent
 
 router = APIRouter(prefix="/ideas", tags=["ProtoIdea"])
 
-# ✅ Fixed: matches IdeaModel schema exactly (tech_hints + target_users, not tech_stack)
-DUMMY_IDEAS = [
-    {
-        "title": "MediTrack",
-        "description": "A personal health record app for patients to track medications and appointments.",
-        "features": ["Medication reminders", "Appointment scheduler", "Health history log"],
-        "tech_hints": ["React", "FastAPI", "PostgreSQL"],
-        "target_users": "Patients managing chronic conditions",
-    },
-    {
-        "title": "CareConnect",
-        "description": "Connects patients with local healthcare providers for quick consultations.",
-        "features": ["Provider search", "Video consultations", "Prescription requests"],
-        "tech_hints": ["Next.js", "Django", "WebRTC"],
-        "target_users": "People needing quick medical advice",
-    },
-]
-
 
 @router.post("/generate", response_model=IdeaResponse, summary="Generate app ideas")
-async def generate_ideas(request: IdeaRequest):
-    # ✅ No DB dependency — won't hang even if DB is down
-    # TODO: swap DUMMY_IDEAS with real agent call once DB is stable:
-    # ideas = await proto_idea_agent.generate(request.domain, request.app_type, request.constraints)
-
+async def generate_ideas(request: IdeaRequest, db: Session = Depends(get_db)):
     session_id = request.session_id or str(uuid.uuid4())
+
+    # ✅ Call the real Gemini-powered agent
+    try:
+        ideas = await proto_idea_agent.generate(
+            domain=request.domain,
+            app_type=request.app_type,
+            constraints=request.constraints or "",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=f"Failed to parse ideas from LLM: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Idea generation failed: {e}")
+
+    ideas_as_dicts = [idea.model_dump() for idea in ideas]
+
+    # ✅ Save to DB
+    try:
+        record = IdeaRecord(
+            id=uuid.uuid4(),
+            session_id=session_id,
+            domain=request.domain,
+            app_type=request.app_type,
+            constraints=request.constraints,
+            ideas=ideas_as_dicts,
+        )
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+        record_id = str(record.id)
+    except Exception as e:
+        db.rollback()
+        # Don't fail the request just because DB is down — still return ideas
+        record_id = "db-unavailable"
 
     return IdeaResponse(
         session_id=session_id,
-        record_id="dummy-id",
+        record_id=record_id,
         domain=request.domain,
         app_type=request.app_type,
-        ideas=DUMMY_IDEAS,
+        ideas=ideas_as_dicts,
     )
 
 
 @router.post("", response_model=IdeaResponse, summary="Generate app ideas (alias)")
-async def generate_ideas_alias(request: IdeaRequest):
-    return await generate_ideas(request)
+async def generate_ideas_alias(request: IdeaRequest, db: Session = Depends(get_db)):
+    return await generate_ideas(request, db)
 
 
 @router.get("/history", response_model=IdeaListResponse, summary="Get all past idea generations")
 def get_history(db: Session = Depends(get_db)):
-    records = db.query(IdeaRecord).order_by(IdeaRecord.created_at.desc()).all()
-    result = []
-    for r in records:
-        result.append(IdeaResponse(
-            session_id=r.session_id,
-            record_id=str(r.id),
-            domain=r.domain,
-            app_type=r.app_type,
-            ideas=r.ideas,
-        ))
-    return IdeaListResponse(records=result)
+    try:
+        records = db.query(IdeaRecord).order_by(IdeaRecord.created_at.desc()).all()
+        result = []
+        for r in records:
+            result.append(IdeaResponse(
+                session_id=r.session_id,
+                record_id=str(r.id),
+                domain=r.domain,
+                app_type=r.app_type,
+                ideas=r.ideas,
+            ))
+        return IdeaListResponse(records=result)
+    except Exception as e:
+        # Return empty history instead of crashing with 500
+        return IdeaListResponse(records=[])
 
 
 @router.get("/{record_id}", response_model=IdeaResponse, summary="Get a specific idea record")

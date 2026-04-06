@@ -2,7 +2,7 @@ import json
 import re
 from typing import List
 
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.output_parsers import StrOutputParser
 
@@ -36,13 +36,12 @@ Return ONLY a valid JSON array of idea objects. No markdown, no explanation, jus
 
 
 class ProtoIdeaAgent:
+
     def _get_llm(self):
-        # ✅ Create fresh each call — avoids event loop issues
-        return ChatGoogleGenerativeAI(
-            model="gemini-1.5-flash-latest",
-            google_api_key=settings.gemini_api_key,
+        return ChatGroq(
+            model="llama-3.3-70b-versatile",
+            api_key=settings.groq_api_key,
             temperature=0.8,
-            max_output_tokens=4096,
         )
 
     def _build_messages(self, domain: str, app_type: str, constraints: str):
@@ -75,7 +74,7 @@ class ProtoIdeaAgent:
         return ideas
 
     async def generate(self, domain: str, app_type: str, constraints: str = "") -> List[IdeaModel]:
-        llm = self._get_llm()   # ✅ created here, inside the running event loop
+        llm = self._get_llm()
         parser = StrOutputParser()
         messages = self._build_messages(domain, app_type, constraints)
         response = await llm.ainvoke(messages)
