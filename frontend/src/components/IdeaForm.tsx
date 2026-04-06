@@ -28,7 +28,7 @@ export default function IdeaForm({ onSubmit, loading }: Props) {
     <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-md p-8 space-y-6">
       <div>
         <h2 className="text-2xl font-bold text-gray-800 mb-1">Generate App Ideas</h2>
-        <p className="text-sm text-gray-500">ProtoIdea uses Gemini 1.5 Flash to generate 3–5 scoped, buildable app ideas.</p>
+        <p className="text-sm text-gray-500">ProtoIdea generates 3-5 scoped, buildable app ideas.</p>
       </div>
 
       {/* Domain */}
@@ -103,7 +103,7 @@ export default function IdeaForm({ onSubmit, loading }: Props) {
             Generating ideas...
           </>
         ) : (
-          '✦ Generate Ideas'
+          'Generate Ideas'
         )}
       </button>
     </form>

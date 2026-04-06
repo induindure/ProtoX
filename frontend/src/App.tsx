@@ -77,7 +77,7 @@ export default function App() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
               </svg>
-              <p className="text-gray-500 font-medium">Asking Gemini to think of ideas for you...</p>
+              <p className="text-gray-500 font-medium">Generating ideas for you...</p>
               <p className="text-xs text-gray-400 mt-1">This usually takes 5–10 seconds</p>
             </div>
           )}
