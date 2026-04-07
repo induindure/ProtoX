@@ -7,12 +7,12 @@ import IdeaCard from './components/IdeaCard'
 import HistoryPanel from './components/HistoryPanel'
 
 import { generateIdeas } from './api/ideas'
-import type { IdeaModel, IdeaRequest, IdeaResponse } from './types'
+import type { RankedIdea, IdeaRequest, IdeaResponse } from './types'
 
 export default function App() {
   const queryClient = useQueryClient()
   const [currentResult, setCurrentResult] = useState<IdeaResponse | null>(null)
-  const [selectedIdea, setSelectedIdea] = useState<IdeaModel | null>(null)
+  const [selectedIdea, setSelectedIdea] = useState<RankedIdea | null>(null)
 
   const mutation = useMutation({
     mutationFn: (req: IdeaRequest) => generateIdeas(req),
@@ -40,7 +40,6 @@ export default function App() {
             K. J. Somaiya School of Engineering · B.Tech FYP 2025–27
           </p>
         </div>
-        {/* Red accent bar */}
         <div className="h-1 bg-brand-red w-full" />
       </header>
 
@@ -84,41 +83,40 @@ export default function App() {
 
           {currentResult && !mutation.isPending && (
             <div className="space-y-4">
-              {/* Result header */}
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-bold text-gray-800">
-                    {currentResult.ideas.length} Ideas for <span className="text-brand-teal">{currentResult.domain}</span>
+                    {currentResult.ideas.length} Ideas for{' '}
+                    <span className="text-brand-teal">{currentResult.domain}</span>
                   </h2>
                   <p className="text-sm text-gray-400">App type: {currentResult.app_type}</p>
                 </div>
                 {selectedIdea && (
                   <div className="bg-teal-50 border border-brand-teal rounded-xl px-4 py-2 text-sm text-brand-teal font-semibold">
-                    ✓ "{selectedIdea.title}" selected
+                    ✓ "{selectedIdea.idea.title}" selected
                   </div>
                 )}
               </div>
 
-              {/* Idea cards */}
               <div className="space-y-4">
-                {currentResult.ideas.map((idea, i) => (
+                {currentResult.ideas.map((ranked, i) => (
                   <IdeaCard
                     key={i}
-                    idea={idea}
+                    idea={ranked.idea}
+                    scores={ranked.scores}
                     index={i}
-                    selected={selectedIdea?.title === idea.title}
-                    onSelect={setSelectedIdea}
+                    selected={selectedIdea?.idea.title === ranked.idea.title}
+                    onSelect={() => setSelectedIdea(ranked)}
                   />
                 ))}
               </div>
 
-              {/* Next step banner */}
               {selectedIdea && (
                 <div className="mt-6 bg-brand-teal text-white rounded-xl p-5 flex items-center justify-between">
                   <div>
                     <p className="font-bold text-base">Ready for ProtoCode →</p>
                     <p className="text-sm text-teal-100 mt-0.5">
-                      "{selectedIdea.title}" will be passed to the code generation agent.
+                      "{selectedIdea.idea.title}" will be passed to the code generation agent.
                     </p>
                   </div>
                   <button

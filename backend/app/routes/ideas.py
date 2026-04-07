@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.models.idea_record import IdeaRecord
 from app.models.schemas import IdeaRequest, IdeaResponse, IdeaListResponse
-from app.agents.proto_idea import proto_idea_agent  # ✅ import the real agent
+from app.agents.proto_idea import proto_idea_agent
+from app.services.scorer import score_and_rank
 
 router = APIRouter(prefix="/ideas", tags=["ProtoIdea"])
 
@@ -16,21 +17,21 @@ router = APIRouter(prefix="/ideas", tags=["ProtoIdea"])
 async def generate_ideas(request: IdeaRequest, db: Session = Depends(get_db)):
     session_id = request.session_id or str(uuid.uuid4())
 
-    # ✅ Call the real Gemini-powered agent
     try:
-        ideas = await proto_idea_agent.generate(
+        raw_ideas = await proto_idea_agent.generate(
             domain=request.domain,
             app_type=request.app_type,
             constraints=request.constraints or "",
         )
     except ValueError as e:
-        raise HTTPException(status_code=422, detail=f"Failed to parse ideas from LLM: {e}")
+        raise HTTPException(status_code=422, detail=f"Failed to parse ideas: {e}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Idea generation failed: {e}")
 
-    ideas_as_dicts = [idea.model_dump() for idea in ideas]
+    # ✅ Your scoring engine ranks the ideas
+    ranked_ideas = score_and_rank(raw_ideas)
 
-    # ✅ Save to DB
+    # Save raw ideas to DB (flat, without scores)
     try:
         record = IdeaRecord(
             id=uuid.uuid4(),
@@ -38,15 +39,14 @@ async def generate_ideas(request: IdeaRequest, db: Session = Depends(get_db)):
             domain=request.domain,
             app_type=request.app_type,
             constraints=request.constraints,
-            ideas=ideas_as_dicts,
+            ideas=[ri.idea.model_dump() for ri in ranked_ideas],
         )
         db.add(record)
         db.commit()
         db.refresh(record)
         record_id = str(record.id)
-    except Exception as e:
+    except Exception:
         db.rollback()
-        # Don't fail the request just because DB is down — still return ideas
         record_id = "db-unavailable"
 
     return IdeaResponse(
@@ -54,7 +54,7 @@ async def generate_ideas(request: IdeaRequest, db: Session = Depends(get_db)):
         record_id=record_id,
         domain=request.domain,
         app_type=request.app_type,
-        ideas=ideas_as_dicts,
+        ideas=ranked_ideas,   # ✅ RankedIdea objects with scores
     )
 
 
@@ -77,8 +77,7 @@ def get_history(db: Session = Depends(get_db)):
                 ideas=r.ideas,
             ))
         return IdeaListResponse(records=result)
-    except Exception as e:
-        # Return empty history instead of crashing with 500
+    except Exception:
         return IdeaListResponse(records=[])
 
 

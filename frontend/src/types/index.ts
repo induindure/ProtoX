@@ -6,6 +6,18 @@ export interface IdeaModel {
   target_users: string
 }
 
+export interface IdeaScores {
+  feasibility: number
+  novelty: number
+  market_fit: number
+  total: number
+}
+
+export interface RankedIdea {
+  idea: IdeaModel
+  scores: IdeaScores
+}
+
 export interface IdeaRequest {
   domain: string
   app_type: string
@@ -18,7 +30,7 @@ export interface IdeaResponse {
   record_id: string
   domain: string
   app_type: string
-  ideas: IdeaModel[]
+  ideas: RankedIdea[]
 }
 
 export interface IdeaListResponse {
