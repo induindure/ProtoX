@@ -1,119 +1,115 @@
 """
-IdeaScorer — ProtoIdea's custom scoring engine.
-Scores each AI-generated idea across 3 dimensions using rule-based heuristics:
+scorer.py — ProtoIdea's ML-powered scoring engine.
+Replaces rule-based heuristics with models trained on 44,000+ real Product Hunt launches.
+Scores each AI-generated idea across 3 dimensions:
   - Feasibility  : can a small team build this?
   - Novelty      : does it sound fresh / non-generic?
   - Market Fit   : does it target a real, specific user group?
 Final score = weighted average. Ideas are returned ranked best-first.
 """
 
+import pickle
 import re
-from app.models.schemas import IdeaModel, RankedIdea, IdeaScores
+import os
 
-# ── Heuristic word lists (your contribution) ──────────────────────────────────
-
-# More features = more scope = harder to build alone
-HIGH_COMPLEXITY_KEYWORDS = [
-    "blockchain", "ai", "machine learning", "real-time", "3d", "ar", "vr",
-    "payment", "streaming", "multi-tenant", "distributed", "iot", "hardware",
-]
-
-# Generic ideas that aren't very novel
-GENERIC_KEYWORDS = [
-    "todo", "to-do", "task manager", "notes", "note-taking", "reminder",
-    "calendar", "weather", "news", "blog", "portfolio", "chat", "messaging",
-]
-
-# Signals that the target audience is specific and real
-SPECIFIC_USER_SIGNALS = [
-    "patient", "doctor", "student", "teacher", "farmer", "nurse", "driver",
-    "freelancer", "startup", "small business", "elderly", "parent", "developer",
-    "researcher", "athlete", "therapist", "caregiver",
-]
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-# ── Scoring functions (each returns 0.0 – 1.0) ───────────────────────────────
+def _load_model(name):
+    path = os.path.join(BASE_DIR, f"{name}.pkl")
+    if not os.path.exists(path):
+        raise FileNotFoundError(
+            f"{name}.pkl not found. Please run train_scorer.py first."
+        )
+    with open(path, "rb") as f:
+        return pickle.load(f)
 
-def _score_feasibility(idea: IdeaModel) -> float:
+
+# Load models once when module is imported
+try:
+    _market_fit_model  = _load_model("market_fit_model")
+    _novelty_model     = _load_model("novelty_model")
+    _feasibility_model = _load_model("feasibility_model")
+    MODELS_LOADED = True
+except FileNotFoundError as e:
+    print(f"[scorer] Warning: {e} — falling back to neutral scores.")
+    MODELS_LOADED = False
+
+
+def _clean_text(text: str) -> str:
+    if not isinstance(text, str):
+        return ""
+    text = text.lower()
+    text = re.sub(r"[^a-z0-9\s]", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def _clamp(value: float, lo=0.0, hi=100.0) -> int:
+    return int(round(max(lo, min(hi, value))))
+
+
+def _score_idea(idea) -> tuple[int, int, int]:
     """
-    Lower complexity = higher feasibility.
-    Penalise ideas with many complex tech hints or high-complexity keywords in description.
+    Takes an IdeaModel and returns (feasibility, novelty, market_fit) as 0-100 ints.
+    Combines description + target_users + tech_hints for richer input.
     """
-    text = (idea.description + " " + " ".join(idea.tech_hints)).lower()
-    penalty = sum(1 for kw in HIGH_COMPLEXITY_KEYWORDS if kw in text)
-    feature_penalty = max(0, len(idea.features) - 5) * 0.1  # >5 features = scope creep
+    if not MODELS_LOADED:
+        return 50, 50, 50
 
-    score = 1.0 - (penalty * 0.12) - feature_penalty
-    return round(max(0.0, min(1.0, score)), 3)
+    # Build a rich text input from all available idea fields
+    text_parts = [
+        idea.description,
+        idea.target_users,
+        " ".join(idea.tech_hints) if idea.tech_hints else "",
+        " ".join(idea.features) if idea.features else "",
+    ]
+    combined = _clean_text(" ".join(text_parts))
 
+    if not combined:
+        return 50, 50, 50
 
-def _score_novelty(idea: IdeaModel) -> float:
-    """
-    Penalise generic/overused idea types.
-    Reward longer, more specific descriptions (more thought = more novel).
-    """
-    text = (idea.title + " " + idea.description).lower()
-    penalty = sum(1 for kw in GENERIC_KEYWORDS if kw in text)
+    feasibility = _clamp(_feasibility_model.predict([combined])[0])
+    novelty     = _clamp(_novelty_model.predict([combined])[0])
+    market_fit  = _clamp(_market_fit_model.predict([combined])[0])
 
-    # Reward specificity — longer description = more unique concept
-    description_bonus = min(len(idea.description) / 600, 0.3)
-
-    score = 0.7 - (penalty * 0.2) + description_bonus
-    return round(max(0.0, min(1.0, score)), 3)
-
-
-def _score_market_fit(idea: IdeaModel) -> float:
-    """
-    Reward ideas that name a specific target user group.
-    Vague targets like 'everyone' or 'users' score low.
-    """
-    target = idea.target_users.lower()
-
-    # Vague targets
-    if any(w in target for w in ["everyone", "anybody", "all users", "general"]):
-        return 0.3
-
-    # Specific named user group
-    specificity_bonus = sum(1 for kw in SPECIFIC_USER_SIGNALS if kw in target)
-
-    # Reward concise, non-empty targeting
-    length_bonus = 0.2 if 5 < len(target) < 80 else 0.0
-
-    score = 0.5 + (specificity_bonus * 0.2) + length_bonus
-    return round(max(0.0, min(1.0, score)), 3)
+    return feasibility, novelty, market_fit
 
 
-# ── Main scorer ───────────────────────────────────────────────────────────────
-
+# ── Weights (same as before) ──────────────────────────────────────────────────
 WEIGHTS = {
-    "feasibility": 0.40,   # most important for solo/small team projects
+    "feasibility": 0.40,
     "novelty":     0.30,
     "market_fit":  0.30,
 }
 
 
-def score_and_rank(ideas: list[IdeaModel]) -> list[RankedIdea]:
+def score_and_rank(ideas):
+    """
+    Drop-in replacement for the old rule-based score_and_rank.
+    Takes a list[IdeaModel], returns a list[RankedIdea] sorted best-first.
+    """
+    from app.models.schemas import RankedIdea, IdeaScores
+
     scored = []
     for idea in ideas:
-        feasibility = _score_feasibility(idea)
-        novelty     = _score_novelty(idea)
-        market_fit  = _score_market_fit(idea)
+        feasibility, novelty, market_fit = _score_idea(idea)
 
-        total = (
+        total = int(
             feasibility * WEIGHTS["feasibility"] +
             novelty     * WEIGHTS["novelty"] +
             market_fit  * WEIGHTS["market_fit"]
         )
 
-        scored.append(RankedIdea(       # ✅ proper Pydantic object, not raw dict
+        scored.append(RankedIdea(
             idea=idea,
             scores=IdeaScores(
-                feasibility=round(feasibility * 100),
-                novelty=round(novelty * 100),
-                market_fit=round(market_fit * 100),
-                total=round(total * 100),
+                feasibility=feasibility,
+                novelty=novelty,
+                market_fit=market_fit,
+                total=total,
             )
         ))
 
-    scored.sort(key=lambda x: x.scores.total, reverse=True)  # ✅ attribute access not dict
+    scored.sort(key=lambda x: x.scores.total, reverse=True)
     return scored
