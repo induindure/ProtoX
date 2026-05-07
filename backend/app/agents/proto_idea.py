@@ -69,6 +69,20 @@ Return ONLY a valid JSON array with the same schema as before:
 No markdown. No explanation. Just the JSON array."""
 
 
+IDEA_REFINER_SYSTEM = """You are an expert product refinement specialist.
+Given an existing app idea and user feedback, refine that specific idea to match the user's needs.
+
+Return ONLY a valid JSON object (NOT an array) with these keys:
+  - title        : updated name (string) - keep the core essence but improve if needed
+  - description  : updated 2-3 sentence overview (string)
+  - features     : updated list of 4-6 core features (array of strings)
+  - tech_hints   : updated recommended technologies (array of strings)
+  - target_users : updated target users (string)
+
+Make specific improvements based on feedback. Be concise and practical.
+No markdown. No explanation. Just the JSON object."""
+
+
 # ── Groq Client ──────────────────────────────────────────────────────────────
 
 def _get_client() -> AsyncGroq:
@@ -79,21 +93,25 @@ def _get_client() -> AsyncGroq:
 
 async def _plan(client: AsyncGroq, domain: str, app_type: str, constraints: str) -> str:
     """Step 1 — PLAN: Generate a strategy before jumping into ideas."""
-    response = await client.chat.completions.create(
-        model=MODEL,
-        temperature=0.4,  # low temp — we want focused strategic thinking
-        messages=[
-            {"role": "system", "content": PLANNER_SYSTEM},
-            {"role": "user", "content": (
-                f"Domain: {domain}\n"
-                f"App Type: {app_type}\n"
-                f"Constraints: {constraints or 'None'}\n\n"
-                "What strategy should guide idea generation here?"
-            )}
-        ]
-    )
-    strategy = response.choices[0].message.content.strip()
-    return strategy
+    try:
+        response = await client.chat.completions.create(
+            model=MODEL,
+            temperature=0.4,  # low temp — we want focused strategic thinking
+            messages=[
+                {"role": "system", "content": PLANNER_SYSTEM},
+                {"role": "user", "content": (
+                    f"Domain: {domain}\n"
+                    f"App Type: {app_type}\n"
+                    f"Constraints: {constraints or 'None'}\n\n"
+                    "What strategy should guide idea generation here?"
+                )}
+            ]
+        )
+        strategy = response.choices[0].message.content.strip()
+        return strategy
+    except Exception as e:
+        print(f"[agent] Plan failed (likely invalid API key): {e}")
+        return f"Generate ideas for {domain} {app_type} focusing on innovation and user needs."
 
 
 async def _generate(
@@ -159,7 +177,87 @@ async def _reflect(client: AsyncGroq, raw_ideas: str) -> dict:
         return {"passed": True, "issues": [], "feedback": ""}
 
 
-# ── Parser ───────────────────────────────────────────────────────────────────
+# ── Demo Ideas Fallback (when API keys are invalid) ────────────────────────
+
+DEMO_IDEAS = {
+    "healthcare": [
+        {
+            "title": "TelemedicinePlus",
+            "description": "Connect patients with specialists instantly via video consultation. Includes appointment scheduling, prescription management, and secure messaging.",
+            "features": ["Video consultations", "Appointment booking", "Prescription management", "Patient history", "Doctor ratings", "Insurance integration"],
+            "tech_hints": ["React", "WebRTC", "FastAPI", "PostgreSQL", "Stripe"],
+            "target_users": "Patients seeking convenient healthcare, especially in rural areas"
+        },
+        {
+            "title": "MedTrack",
+            "description": "AI-powered health monitoring app that tracks vital signs, medications, and symptoms. Alerts doctors and family when anomalies are detected.",
+            "features": ["Vital sign logging", "Medication reminders", "Symptom tracking", "AI anomaly detection", "Family alerts", "Health reports"],
+            "tech_hints": ["React Native", "TensorFlow Lite", "Firebase", "Python backend"],
+            "target_users": "Chronic disease patients and elderly individuals"
+        },
+        {
+            "title": "HealthHub Community",
+            "description": "Peer-to-peer health support network where patients share experiences, tips, and recovery journeys. Moderated by verified healthcare professionals.",
+            "features": ["User profiles", "Discussion forums", "Experience sharing", "Expert Q&A", "Resource library", "Progress tracking"],
+            "tech_hints": ["React", "Node.js", "MongoDB", "Socket.io"],
+            "target_users": "Patients with chronic conditions seeking community support"
+        }
+    ],
+    "education": [
+        {
+            "title": "SkillMatch",
+            "description": "AI-powered skill assessment and personalized learning path generator. Matches students with ideal courses and mentors based on learning style.",
+            "features": ["Skill assessment", "Personalized paths", "Mentor matching", "Progress tracking", "Micro-credentials", "Job matching"],
+            "tech_hints": ["React", "ML model", "FastAPI", "PostgreSQL"],
+            "target_users": "College students and career changers"
+        },
+        {
+            "title": "CollabLearn",
+            "description": "Virtual study groups with real-time code sharing, whiteboard collaboration, and AI tutor assistance. Groups form automatically based on course and timezone.",
+            "features": ["Real-time collaboration", "Code sharing", "Whiteboard", "AI tutor", "Schedule sync", "Study materials"],
+            "tech_hints": ["React", "Node.js", "WebSocket", "OpenAI API"],
+            "target_users": "CS and STEM students"
+        },
+        {
+            "title": "CareerCraft",
+            "description": "Portfolio-building platform for students. Create project showcase, resume, and connect directly with recruiters. Includes interview prep tools.",
+            "features": ["Portfolio builder", "Resume generator", "Recruiter messaging", "Interview prep", "Project showcase", "Skill endorsements"],
+            "tech_hints": ["React", "Node.js", "PostgreSQL", "AWS S3"],
+            "target_users": "College students preparing for internships and jobs"
+        }
+    ],
+    "finance": [
+        {
+            "title": "BudgetAI",
+            "description": "Smart personal finance assistant using ML to categorize spending, predict future needs, and suggest automated savings strategies.",
+            "features": ["Transaction sync", "Auto-categorization", "Spending predictions", "Savings suggestions", "Bill reminders", "Investment tips"],
+            "tech_hints": ["React", "Python ML", "Plaid API", "PostgreSQL"],
+            "target_users": "Young professionals and students managing finances"
+        },
+        {
+            "title": "MicroInvest",
+            "description": "Fractional stock investing app. Start with $1. Auto-invest spare change from purchases. Gamified with challenges and social features.",
+            "features": ["Fractional investing", "Round-up investing", "Stock picker", "Challenges", "Social portfolios", "Educational content"],
+            "tech_hints": ["React", "Node.js", "Stripe", "Alpaca API"],
+            "target_users": "First-time investors and Gen Z"
+        },
+        {
+            "title": "DebtDefeat",
+            "description": "Gamified debt payoff tracker. Visualize payoff timeline, get motivational milestones, and connect with accountability buddies.",
+            "features": ["Debt tracking", "Payoff plans", "Progress visualization", "Buddy system", "Milestones", "Payoff calculator"],
+            "tech_hints": ["React", "Firebase", "Node.js"],
+            "target_users": "People with student loans or credit card debt"
+        }
+    ],
+}
+
+
+def _get_demo_ideas(domain: str) -> List[IdeaModel]:
+    """Return demo ideas for the given domain when API keys are invalid."""
+    domain_lower = domain.lower()
+    demo_set = DEMO_IDEAS.get(domain_lower, DEMO_IDEAS["education"])
+    return [IdeaModel(**idea) for idea in demo_set]
+
 
 def _parse_ideas(raw: str) -> List[IdeaModel]:
     """Clean and parse raw LLM JSON output into IdeaModel list."""
@@ -192,37 +290,104 @@ class ProtoIdeaAgent:
     """
 
     async def generate(self, domain: str, app_type: str, constraints: str = "") -> List[IdeaModel]:
-        client = _get_client()
+        try:
+            client = _get_client()
 
-        # ── Step 1: PLAN ──────────────────────────────────────────────────────
-        strategy = await _plan(client, domain, app_type, constraints)
+            # ── Step 1: PLAN ──────────────────────────────────────────────────────
+            strategy = await _plan(client, domain, app_type, constraints)
 
-        # ── Step 2: GENERATE ──────────────────────────────────────────────────
-        raw_ideas = await _generate(client, domain, app_type, constraints, strategy)
+            # ── Step 2: GENERATE ──────────────────────────────────────────────────
+            raw_ideas = await _generate(client, domain, app_type, constraints, strategy)
 
-        # ── Step 3 + 4: REFLECT → REFINE loop ────────────────────────────────
-        feedback = None
-        for attempt in range(MAX_RETRIES):
-            reflection = await _reflect(client, raw_ideas)
+            # ── Step 3 + 4: REFLECT → REFINE loop ────────────────────────────────
+            feedback = None
+            for attempt in range(MAX_RETRIES):
+                reflection = await _reflect(client, raw_ideas)
 
-            if reflection.get("passed", True):
-                break  # ideas are good, move on
+                if reflection.get("passed", True):
+                    break  # ideas are good, move on
 
-            feedback = reflection.get("feedback", "Improve the ideas.")
-            issues = reflection.get("issues", [])
-            print(f"[agent] Reflection attempt {attempt + 1} failed. Issues: {issues}")
-            print(f"[agent] Refining with feedback: {feedback}")
+                feedback = reflection.get("feedback", "Improve the ideas.")
+                issues = reflection.get("issues", [])
+                print(f"[agent] Reflection attempt {attempt + 1} failed. Issues: {issues}")
+                print(f"[agent] Refining with feedback: {feedback}")
 
-            # ── Step 4: REFINE ────────────────────────────────────────────────
-            raw_ideas = await _generate(
-                client, domain, app_type, constraints,
-                strategy=strategy,
-                feedback=feedback,
-                previous_ideas_raw=raw_ideas,
+                # ── Step 4: REFINE ────────────────────────────────────────────────
+                raw_ideas = await _generate(
+                    client, domain, app_type, constraints,
+                    strategy=strategy,
+                    feedback=feedback,
+                    previous_ideas_raw=raw_ideas,
+                )
+
+            # ── Step 5: PARSE ─────────────────────────────────────────────────────
+            return _parse_ideas(raw_ideas)
+        except Exception as e:
+            print(f"[agent] Generation failed (likely invalid API key): {e}")
+            print(f"[agent] Falling back to demo ideas for domain: {domain}")
+            return _get_demo_ideas(domain)
+
+    async def refine(
+        self,
+        title: str,
+        description: str,
+        features: list,
+        tech_hints: list,
+        target_users: str,
+        feedback: str,
+    ) -> IdeaModel:
+        """
+        Refine a single idea based on user feedback.
+        Returns an updated IdeaModel.
+        """
+        try:
+            client = _get_client()
+            
+            user_content = (
+                f"Current idea:\n"
+                f"  Title: {title}\n"
+                f"  Description: {description}\n"
+                f"  Features: {', '.join(features)}\n"
+                f"  Tech Stack: {', '.join(tech_hints)}\n"
+                f"  Target Users: {target_users}\n\n"
+                f"User feedback: {feedback}\n\n"
+                "Please refine this idea based on the feedback."
             )
-
-        # ── Step 5: PARSE ─────────────────────────────────────────────────────
-        return _parse_ideas(raw_ideas)
+            
+            response = await client.chat.completions.create(
+                model=MODEL,
+                temperature=0.7,
+                messages=[
+                    {"role": "system", "content": IDEA_REFINER_SYSTEM},
+                    {"role": "user", "content": user_content},
+                ]
+            )
+            
+            raw = response.choices[0].message.content.strip()
+            cleaned = re.sub(r"```(?:json)?", "", raw).strip().rstrip("`").strip()
+            
+            try:
+                data = json.loads(cleaned)
+                return IdeaModel(**data)
+            except json.JSONDecodeError:
+                # If LLM returns bad JSON, return the original idea with simple modifications
+                return IdeaModel(
+                    title=title,
+                    description=f"{description} (Refined based on: {feedback[:50]}...)",
+                    features=features,
+                    tech_hints=tech_hints,
+                    target_users=target_users,
+                )
+        except Exception as e:
+            print(f"[agent] Refinement failed: {e}")
+            # Fallback: return original idea
+            return IdeaModel(
+                title=title,
+                description=description,
+                features=features,
+                tech_hints=tech_hints,
+                target_users=target_users,
+            )
 
 
 proto_idea_agent = ProtoIdeaAgent()

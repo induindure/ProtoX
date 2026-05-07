@@ -5,20 +5,24 @@ import toast from 'react-hot-toast'
 import IdeaForm from './components/IdeaForm'
 import IdeaCard from './components/IdeaCard'
 import HistoryPanel from './components/HistoryPanel'
+import IdeaRefinement from './components/IdeaRefinement'
 
-import { generateIdeas } from './api/ideas'
-import type { RankedIdea, IdeaRequest, IdeaResponse } from './types'
+import { generateIdeas, refineIdea } from './api/ideas'
+import type { RankedIdea, IdeaRequest, IdeaResponse, IdeaModel } from './types'
 
 export default function App() {
   const queryClient = useQueryClient()
   const [currentResult, setCurrentResult] = useState<IdeaResponse | null>(null)
   const [selectedIdea, setSelectedIdea] = useState<RankedIdea | null>(null)
+  const [refiningIdea, setRefiningIdea] = useState<IdeaModel | null>(null)
+  const [refinementLoading, setRefinementLoading] = useState(false)
 
   const mutation = useMutation({
     mutationFn: (req: IdeaRequest) => generateIdeas(req),
     onSuccess: (data) => {
       setCurrentResult(data)
       setSelectedIdea(null)
+      setRefiningIdea(null)
       queryClient.invalidateQueries({ queryKey: ['idea-history'] })
       toast.success(`Generated ${data.ideas.length} ideas!`)
     },
@@ -26,6 +30,42 @@ export default function App() {
       toast.error('Failed to generate ideas. Check your API key and backend.')
     },
   })
+
+  const handleRefineIdea = async (feedback: string): Promise<IdeaModel> => {
+    if (!refiningIdea) throw new Error('No idea to refine')
+    
+    setRefinementLoading(true)
+    try {
+      const refined = await refineIdea({
+        title: refiningIdea.title,
+        current_description: refiningIdea.description,
+        current_features: refiningIdea.features,
+        current_tech_hints: refiningIdea.tech_hints,
+        current_target_users: refiningIdea.target_users,
+        feedback,
+      })
+      
+      setRefiningIdea(refined.idea || refined)
+      toast.success('Idea refined! ✓')
+      return refined.idea || refined
+    } catch (error) {
+      toast.error('Failed to refine idea. Try again!')
+      throw error
+    } finally {
+      setRefinementLoading(false)
+    }
+  }
+
+  const handleFinalizeIdea = () => {
+    if (refiningIdea) {
+      setSelectedIdea({
+        idea: refiningIdea,
+        scores: selectedIdea?.scores || { total: 0, feasibility: 0, novelty: 0, market_fit: 0 }
+      })
+      setRefiningIdea(null)
+      toast.success('Idea finalized! Ready for ProtoCode 🚀')
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -91,42 +131,56 @@ export default function App() {
                   </h2>
                   <p className="text-sm text-gray-400">App type: {currentResult.app_type}</p>
                 </div>
-                {selectedIdea && (
+                {selectedIdea && !refiningIdea && (
                   <div className="bg-teal-50 border border-brand-teal rounded-xl px-4 py-2 text-sm text-brand-teal font-semibold">
                     ✓ "{selectedIdea.idea.title}" selected
                   </div>
                 )}
               </div>
 
-              <div className="space-y-4">
-                {currentResult.ideas.map((ranked, i) => (
-                  <IdeaCard
-                    key={i}
-                    idea={ranked.idea}
-                    scores={ranked.scores}
-                    index={i}
-                    selected={selectedIdea?.idea.title === ranked.idea.title}
-                    onSelect={() => setSelectedIdea(ranked)}
-                  />
-                ))}
-              </div>
-
-              {selectedIdea && (
-                <div className="mt-6 bg-brand-teal text-white rounded-xl p-5 flex items-center justify-between">
-                  <div>
-                    <p className="font-bold text-base">Ready for ProtoCode →</p>
-                    <p className="text-sm text-teal-100 mt-0.5">
-                      "{selectedIdea.idea.title}" will be passed to the code generation agent.
-                    </p>
+              {refiningIdea ? (
+                <IdeaRefinement
+                  idea={refiningIdea}
+                  onRefine={handleRefineIdea}
+                  onFinalize={handleFinalizeIdea}
+                  loading={refinementLoading}
+                />
+              ) : (
+                <>
+                  <div className="space-y-4">
+                    {currentResult.ideas.map((ranked, i) => (
+                      <IdeaCard
+                        key={i}
+                        idea={ranked.idea}
+                        scores={ranked.scores}
+                        index={i}
+                        selected={selectedIdea?.idea.title === ranked.idea.title}
+                        onSelect={() => {
+                          setSelectedIdea(ranked)
+                          setRefiningIdea(ranked.idea)
+                        }}
+                      />
+                    ))}
                   </div>
-                  <button
-                    disabled
-                    className="bg-white text-brand-teal font-semibold px-4 py-2 rounded-lg text-sm opacity-60 cursor-not-allowed"
-                    title="ProtoCode coming soon"
-                  >
-                    Generate Code (soon)
-                  </button>
-                </div>
+
+                  {selectedIdea && (
+                    <div className="mt-6 bg-brand-teal text-white rounded-xl p-5 flex items-center justify-between">
+                      <div>
+                        <p className="font-bold text-base">Ready for ProtoCode →</p>
+                        <p className="text-sm text-teal-100 mt-0.5">
+                          "{selectedIdea.idea.title}" will be passed to the code generation agent.
+                        </p>
+                      </div>
+                      <button
+                        disabled
+                        className="bg-white text-brand-teal font-semibold px-4 py-2 rounded-lg text-sm opacity-60 cursor-not-allowed"
+                        title="ProtoCode coming soon"
+                      >
+                        Generate Code (soon)
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}

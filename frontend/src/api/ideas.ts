@@ -11,6 +11,18 @@ export const generateIdeas = async (payload: IdeaRequest): Promise<IdeaResponse>
   return data
 }
 
+export const refineIdea = async (payload: {
+  title: string
+  current_description: string
+  current_features: string[]
+  current_tech_hints: string[]
+  current_target_users: string
+  feedback: string
+}) => {
+  const { data } = await api.post('/ideas/refine', payload)
+  return data
+}
+
 export const getHistory = async (): Promise<IdeaListResponse> => {
   const { data } = await api.get<IdeaListResponse>('/ideas/history')
   return data
