@@ -15,10 +15,11 @@ export default function App() {
 
   // Read idea from localStorage (sent by protoidea)
   useEffect(() => {
-    const stored = localStorage.getItem('protocode_idea')
-    if (stored) {
+    const params = new URLSearchParams(window.location.search)
+    const ideaParam = params.get('idea')
+    if (ideaParam) {
       try {
-        setIdea(JSON.parse(stored))
+        setIdea(JSON.parse(decodeURIComponent(ideaParam)))
       } catch {
         setError('Could not load idea from ProtoIdea.')
       }
