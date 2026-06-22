@@ -37,22 +37,22 @@ export default function App() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#f8fafc' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
 
       {/* Header */}
       <header style={{
         padding: '0.9rem 2rem',
-        borderBottom: '3px solid #6366f1',
+        borderBottom: '3px solid var(--accent)',
         display: 'flex',
         alignItems: 'center',
         gap: '1rem',
         background: '#fff',
       }}>
-        <span style={{ fontWeight: 800, fontSize: '1.2rem', color: '#1a1a1a', letterSpacing: '-0.5px' }}>
+        <span style={{ fontWeight: 800, fontSize: '1.2rem', color: 'var(--text)', letterSpacing: '-0.5px' }}>
           ProtoX
         </span>
         <span style={{
-          background: '#6366f1',
+          background: 'var(--accent)',
           color: '#fff',
           fontSize: '0.75rem',
           fontWeight: 700,
@@ -61,7 +61,7 @@ export default function App() {
         }}>
           ProtoTest
         </span>
-        <span style={{ marginLeft: 'auto', color: '#94a3b8', fontSize: '0.85rem' }}>
+        <span style={{ marginLeft: 'auto', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
           K. J. Somaiya School of Engineering · B.Tech FYP 2025–27
         </span>
       </header>
@@ -70,7 +70,7 @@ export default function App() {
       <div style={{
         padding: '2rem',
         background: '#fff',
-        borderBottom: '1px solid #e2e8f0',
+        borderBottom: '1px solid var(--border)',
         maxWidth: '860px',
         width: '100%',
         alignSelf: 'center',
@@ -82,7 +82,7 @@ export default function App() {
           <h2 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '0.3rem' }}>
             Test Generated Code
           </h2>
-          <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
             ProtoTest checks your generated project for syntax errors and reviews code quality using AI.
           </p>
         </div>
@@ -90,14 +90,15 @@ export default function App() {
         {project ? (
           <div style={{
             padding: '0.85rem 1.25rem',
-            background: '#f1f5f9',
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
             borderRadius: '8px',
             fontSize: '0.88rem',
-            color: '#334155',
+            color: 'var(--text)',
           }}>
             <strong>{project.project_name}</strong>
-            <span style={{ color: '#94a3b8', marginLeft: '0.75rem' }}>{project.tech_stack}</span>
-            <span style={{ color: '#94a3b8', marginLeft: '0.75rem' }}>· {project.files.length} files</span>
+            <span style={{ color: 'var(--text-muted)', marginLeft: '0.75rem' }}>{project.tech_stack}</span>
+            <span style={{ color: 'var(--text-muted)', marginLeft: '0.75rem' }}>· {project.files.length} files</span>
           </div>
         ) : (
           <div style={{
@@ -111,7 +112,7 @@ export default function App() {
           </div>
         )}
 
-        {error && <p style={{ color: '#dc2626', fontSize: '0.85rem', fontWeight: 500 }}>{error}</p>}
+        {error && <p style={{ color: 'var(--accent)', fontSize: '0.85rem', fontWeight: 500 }}>{error}</p>}
 
         <button
           onClick={handleTest}
@@ -119,7 +120,7 @@ export default function App() {
           style={{
             alignSelf: 'flex-start',
             padding: '0.65rem 2rem',
-            background: loading || !project ? '#ccc' : '#6366f1',
+            background: loading || !project ? '#ccc' : 'var(--accent)',
             color: '#fff',
             border: 'none',
             borderRadius: '6px',

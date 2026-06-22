@@ -71,7 +71,7 @@ export default function App() {
       project_name: result.project_name,
       tech_stack: techStack,
     }))
-    window.location.href = `http://localhost:5175/?project=${payload}`  // 👈 ProtoTest port, change if different
+    window.open(`http://localhost:5175/?project=${payload}`, '_blank')
   }
 
   return (
