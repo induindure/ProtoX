@@ -1,4 +1,10 @@
 import os
+from dotenv import load_dotenv
+from pathlib import Path
+
+env_path = Path(__file__).resolve().parent.parent.parent.parent / ".env"
+print("Looking for .env at:", env_path)  # add this line
+load_dotenv(dotenv_path=env_path)
 
 async def review_code(file_path: str, content: str) -> str:
     api_key = os.environ.get("GROQ_API_KEY")
