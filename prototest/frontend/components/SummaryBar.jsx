@@ -1,6 +1,6 @@
 export default function SummaryBar({ summary, projectName, techStack }) {
   const total = summary.total
-  const score = Math.round(((summary.passed + summary.warned * 0.5) / total) * 100)
+  const testsPassed = summary.tests_passed
 
   const pill = (label, count, bg, color) => (
     <div style={{
@@ -43,27 +43,24 @@ export default function SummaryBar({ summary, projectName, techStack }) {
           width: '72px',
           height: '72px',
           borderRadius: '50%',
-          background: score >= 80 ? '#dcfce7' : score >= 50 ? '#fef9c3' : '#fee2e2',
+          background: testsPassed ? '#dcfce7' : '#fee2e2',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          border: `3px solid ${score >= 80 ? '#16a34a' : score >= 50 ? '#ca8a04' : '#dc2626'}`,
+          border: `3px solid ${testsPassed ? '#16a34a' : '#dc2626'}`,
         }}>
-          <span style={{
-            fontSize: '1.3rem',
-            fontWeight: 800,
-            color: score >= 80 ? '#16a34a' : score >= 50 ? '#ca8a04' : '#dc2626',
-          }}>{score}</span>
-          <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', fontWeight: 600 }}>/ 100</span>
+          <span style={{ fontSize: '1.3rem' }}>{testsPassed ? '✅' : '❌'}</span>
+          <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+            {testsPassed ? 'PASS' : 'FAIL'}
+          </span>
         </div>
       </div>
 
       <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
-        {pill('✅ Passed', summary.passed, '#dcfce7', '#166534')}
-        {pill('⚠️ Warned', summary.warned, '#fef9c3', '#854d0e')}
-        {pill('❌ Failed', summary.failed, '#fee2e2', '#991b1b')}
-        {pill('⏭️ Skipped', summary.skipped, '#f1f5f9', '#475569')}
+        {pill('📄 Files', total, '#f1f5f9', '#475569')}
+        {pill('❌ Syntax errors', summary.syntax_failed, summary.syntax_failed > 0 ? '#fee2e2' : '#dcfce7', summary.syntax_failed > 0 ? '#991b1b' : '#166534')}
+        {pill(testsPassed ? '✅ Tests passed' : '❌ Tests failed', '', testsPassed ? '#dcfce7' : '#fee2e2', testsPassed ? '#166534' : '#991b1b')}
       </div>
     </div>
   )
