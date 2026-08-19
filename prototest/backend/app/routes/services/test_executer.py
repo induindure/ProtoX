@@ -9,7 +9,6 @@ from pathlib import Path
 
 
 def run_pytest(project_dir: Path, test_code: str) -> dict:
-    # write the generated test file into the project
     test_file = project_dir / "test_generated.py"
     test_file.write_text(test_code, encoding="utf-8")
 
