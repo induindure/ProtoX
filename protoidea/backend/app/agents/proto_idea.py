@@ -20,7 +20,7 @@ from app.models.schemas import IdeaModel
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
-MODEL = "llama-3.3-70b-versatile"
+MODEL = "openai/gpt-oss-120b"
 MAX_RETRIES = 2  # how many times agent will try to refine before giving up
 
 

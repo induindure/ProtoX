@@ -57,7 +57,7 @@ async def generate_test_file(files: list, runner: str) -> str:
     )
 
     response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model="openai/gpt-oss-120b",
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Project files:\n\n{file_dump}"},
