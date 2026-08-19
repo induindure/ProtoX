@@ -39,6 +39,7 @@ async def generate_code(idea: str, tech_stack: str):
         api_key=os.getenv("GROQ_API_KEY"),
         model="openai/gpt-oss-120b",
         temperature=0.5,
+        model_kwargs={"response_format": {"type": "json_object"}},
     )
 
     messages = [
@@ -48,12 +49,6 @@ async def generate_code(idea: str, tech_stack: str):
 
     response = await llm.ainvoke(messages)
     raw = response.content.strip()
-
-    if raw.startswith("```"):
-        raw = raw.split("```")[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
-    raw = raw.strip()
 
     parsed = json.loads(raw)
     parsed["file_tree"] = build_file_tree(parsed["files"])
