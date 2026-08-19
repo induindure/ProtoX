@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { runTests } from './api/prototest'
 import SummaryBar from './components/SummaryBar'
 import FileResultCard from './components/FileResultCard'
+import TestExecutionCard from './components/TestExecutionCard'
 
 export default function App() {
   const [project, setProject] = useState(null)
@@ -83,7 +84,7 @@ export default function App() {
             Test Generated Code
           </h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-            ProtoTest checks your generated project for syntax errors and reviews code quality using AI.
+            ProtoTest checks your generated project for syntax errors and runs real automated tests against it.
           </p>
         </div>
 
@@ -143,7 +144,8 @@ export default function App() {
             techStack={report.tech_stack}
           />
           <div style={{ padding: '1.5rem 2rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {report.results.map((r) => (
+            <TestExecutionCard execution={report.test_execution} />
+            {report.syntax_results.map((r) => (
               <FileResultCard key={r.path} result={r} />
             ))}
           </div>
