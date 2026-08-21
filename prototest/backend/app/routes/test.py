@@ -1,12 +1,30 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import List
+from app.routes.services.project_store import save_project, get_project
 
 from app.routes.services.syntax_checker import check_syntax
 from app.routes.services.stack_runner import get_runner
 from app.routes.services.project_builder import build_project_dir
 from app.routes.services.test_generator import generate_test_file
 from app.routes.services.test_executor import run_pytest, run_jest, cleanup
+
+@router.post("/store-project")
+async def store_project(request: TestRequest):
+    project_id = save_project({
+        "files": [f.dict() for f in request.files],
+        "project_name": request.project_name,
+        "tech_stack": request.tech_stack,
+    })
+    return {"project_id": project_id}
+
+
+@router.get("/get-project/{project_id}")
+async def get_project_endpoint(project_id: str):
+    project = get_project(project_id)
+    if not project:
+        return {"error": "Project not found or expired"}
+    return project
 
 router = APIRouter()
 

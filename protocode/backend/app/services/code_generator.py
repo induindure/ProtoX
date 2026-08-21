@@ -39,6 +39,8 @@ async def generate_code(idea: str, tech_stack: str):
         api_key=os.getenv("GROQ_API_KEY"),
         model="openai/gpt-oss-120b",
         temperature=0.5,
+        max_tokens=8000,
+        reasoning_effort="low",
     )
 
     messages = [
@@ -47,6 +49,9 @@ async def generate_code(idea: str, tech_stack: str):
     ]
 
     response = await llm.ainvoke(messages)
+    print("RAW RESPONSE CONTENT:", repr(response.content))
+    print("RESPONSE METADATA:", response.response_metadata)
+
     raw = response.content.strip()
 
     if raw.startswith("```"):
@@ -55,10 +60,12 @@ async def generate_code(idea: str, tech_stack: str):
             raw = raw[4:]
     raw = raw.strip()
 
+    print("RAW LENGTH:", len(raw))
+    print("RAW PREVIEW:", raw[:300])
+
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError:
-        # ask the model to fix its own broken JSON before giving up
         repair_messages = [
             SystemMessage(content="You output broken JSON. Return ONLY the corrected, valid JSON — no markdown, no explanation."),
             HumanMessage(content=raw),
@@ -71,5 +78,6 @@ async def generate_code(idea: str, tech_stack: str):
                 repaired = repaired[4:]
         parsed = json.loads(repaired.strip())
 
+    print("PARSED KEYS:", list(parsed.keys()))
     parsed["file_tree"] = build_file_tree(parsed["files"])
     return parsed

@@ -16,13 +16,12 @@ export default function App() {
   const outputRef = useRef(null)  // 👈 ref for auto-scroll
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const ideaParam = params.get('idea')
-    if (ideaParam) {
+    const stored = sessionStorage.getItem('protox_project')
+    if (stored) {
       try {
-        setIdea(JSON.parse(decodeURIComponent(ideaParam)))
+        setProject(JSON.parse(stored))
       } catch {
-        setError('Could not load idea from ProtoIdea.')
+        setError('Could not load project from ProtoCode.')
       }
     }
   }, [])
@@ -65,15 +64,24 @@ export default function App() {
     if (file) setSelectedFile(file)
   }
 
-  const handleSendToProtoTest = () => {
-    const payload = encodeURIComponent(JSON.stringify({
-      files: result.files,
-      project_name: result.project_name,
-      tech_stack: techStack,
-    }))
-    window.open(`http://localhost:5175/?project=${payload}`, '_blank')
+  const handleSendToProtoTest = async () => {
+    try {
+      const response = await fetch('http://localhost:8002/api/store-project', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          files: result.files,
+          project_name: result.project_name,
+          tech_stack: techStack,
+        }),
+      })
+      const data = await response.json()
+      window.open(`http://localhost:5175/?id=${data.project_id}`, '_blank')
+    } catch {
+      setError('Could not send project to ProtoTest.')
+    }
   }
-
+  
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
 
