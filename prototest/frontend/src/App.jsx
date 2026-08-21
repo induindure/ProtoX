@@ -12,13 +12,18 @@ export default function App() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const raw = params.get('project')
-    if (raw) {
-      try {
-        setProject(JSON.parse(decodeURIComponent(raw)))
-      } catch {
-        setError('Could not load project from ProtoCode.')
-      }
+    const projectId = params.get('id')
+    if (projectId) {
+      fetch(`http://localhost:8002/api/get-project/${projectId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.error) {
+            setError(data.error)
+          } else {
+            setProject(data)
+          }
+        })
+        .catch(() => setError('Could not load project from ProtoCode.'))
     }
   }, [])
 
