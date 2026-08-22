@@ -30,7 +30,6 @@ Requirements:
 - Write real, working code with actual logic — not placeholder comments
 - Include at least one authentication-related file (login route or auth middleware)
 - Include a .env.example file
-- All file content must have newlines escaped as \\n
 - Do not generate the same boilerplate for every project — tailor code specifically to the described app
 """
 
