@@ -4,6 +4,8 @@ from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage
 from app.services.file_builder import build_file_tree
+from app.services.dependency_scanner import build_requirements_txt
+from app.services.typing_fixer import fix_missing_typing_imports
 
 load_dotenv()
 
@@ -78,5 +80,21 @@ async def generate_code(idea: str, tech_stack: str):
         parsed = json.loads(repaired.strip())
 
     print("PARSED KEYS:", list(parsed.keys()))
+    # Deterministically build requirements.txt from actual imports,
+    # instead of relying on the LLM to remember every dependency
+    parsed["files"] = fix_missing_typing_imports(parsed["files"])
+    if "FastAPI" in tech_stack or "Django" in tech_stack:
+        backend_framework = "FastAPI" if "FastAPI" in tech_stack else "Django"
+        req_content = build_requirements_txt(parsed["files"], backend_framework)
+
+        existing_req = next((f for f in parsed["files"] if f["path"].endswith("requirements.txt")), None)
+        if existing_req:
+            existing_req["content"] = req_content
+        else:
+            # find the backend folder prefix from an existing backend file, default to "backend/"
+            backend_file = next((f for f in parsed["files"] if f["path"].startswith("backend/")), None)
+            req_path = "backend/requirements.txt" if backend_file else "requirements.txt"
+            parsed["files"].append({"path": req_path, "content": req_content})
+
     parsed["file_tree"] = build_file_tree(parsed["files"])
     return parsed

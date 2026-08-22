@@ -7,18 +7,27 @@ import subprocess
 import shutil
 import sys
 from pathlib import Path
+import os
 
 
 def run_pytest(project_dir: Path, test_code: str) -> dict:
+    backend_dir = project_dir / "backend" if (project_dir / "backend").exists() else project_dir
+
+    # ensure backend is a real importable package
+    init_file = backend_dir / "__init__.py"
+    if not init_file.exists():
+        init_file.write_text("", encoding="utf-8")
+
+    # test file goes at project ROOT now, not inside backend/
     test_file = project_dir / "test_generated.py"
     test_file.write_text(test_code, encoding="utf-8")
 
-    req_file = project_dir / "requirements.txt"
+    req_file = backend_dir / "requirements.txt"
     install_note = None
 
     if req_file.exists():
         install = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "-r", "requirements.txt", "--quiet"],
+            [sys.executable, "-m", "pip", "install", "-r", str(req_file), "--quiet"],
             cwd=project_dir, capture_output=True, text=True, timeout=60,
         )
         if install.returncode != 0:
@@ -26,10 +35,13 @@ def run_pytest(project_dir: Path, test_code: str) -> dict:
     else:
         install_note = "No requirements.txt found, running with base environment."
 
+    test_env = os.environ.copy()
+    test_env["DATABASE_URL"] = "sqlite:///./test_generated.db"
+
     try:
         result = subprocess.run(
             [sys.executable, "-m", "pytest", "test_generated.py", "-v", "--tb=short"],
-            cwd=project_dir, capture_output=True, text=True, timeout=30,
+            cwd=project_dir, capture_output=True, text=True, timeout=30, env=test_env,
         )
         return {
             "runner": "pytest",

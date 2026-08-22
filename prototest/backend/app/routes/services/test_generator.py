@@ -6,16 +6,20 @@ Unlike ai_reviewer.py, this produces executable test files, not a text review.
 import os
 from dotenv import load_dotenv
 from pathlib import Path
+import re
 
 load_dotenv()
 
 PYTEST_SYSTEM_PROMPT = """
 You are a senior backend engineer writing pytest tests for a FastAPI/Django project.
-You will be given the full contents of a generated project's files.
+You will be given the full contents of a generated project's files, with paths like "backend/main.py".
+
+The test file will be executed from the project ROOT, with "backend" as a proper
+Python package. Import modules using the full path, e.g. "from backend.main import app"
+or "from backend.database import Base" — keep the "backend." prefix.
 
 Write ONE pytest test file that imports the real modules/functions shown to you
-(use the exact file paths and names given — do not invent filenames) and tests
-the main routes/functions with realistic inputs.
+and tests the main routes/functions with realistic inputs.
 
 Return ONLY raw Python test code. No markdown, no explanation, no backticks.
 Include at least 3 test functions covering the main functionality.
@@ -33,6 +37,17 @@ Return ONLY raw JavaScript test code. No markdown, no explanation, no backticks.
 Include at least 3 test cases covering the main functionality.
 """
 
+import re
+
+def _strip_backend_prefix(code: str) -> str:
+    """
+    Deterministically removes 'backend.' prefixes from import statements,
+    since tests are executed from inside the backend/ folder as the root.
+    Catches: 'import backend.x', 'from backend.x import y', 'backend.x as y'
+    """
+    code = re.sub(r'\bfrom backend\.', 'from ', code)
+    code = re.sub(r'\bimport backend\.', 'import ', code)
+    return code
 
 async def generate_test_file(files: list, runner: str) -> str:
     """
@@ -72,8 +87,13 @@ async def generate_test_file(files: list, runner: str) -> str:
         raw = raw.split("```")[1]
         if raw.startswith("python") or raw.startswith("javascript") or raw.startswith("js"):
             raw = raw.split("\n", 1)[1]
-    return raw.strip()
 
+    raw = raw.strip()
+    if raw.endswith("```"):
+        raw = raw.rsplit("```", 1)[0]
+
+    raw = raw.strip()
+    return raw
 
 def _is_backend_file(path: str, runner: str) -> bool:
     if runner == "pytest":
