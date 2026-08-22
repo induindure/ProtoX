@@ -27,7 +27,7 @@ def run_pytest(project_dir: Path, test_code: str) -> dict:
 
     try:
         result = subprocess.run(
-            ["pytest", "test_generated.py", "-v", "--tb=short"],
+            ["python", "-m", "pytest", "test_generated.py", "-v", "--tb=short"],
             cwd=project_dir, capture_output=True, text=True, timeout=30,
         )
         return {
@@ -56,8 +56,8 @@ def run_jest(project_dir: Path, test_code: str) -> dict:
 
     if pkg_file.exists():
         install = subprocess.run(
-            ["npm", "install", "--silent"],
-            cwd=project_dir, capture_output=True, text=True, timeout=90,
+            ["python", "-m", "pip", "install", "-r", "requirements.txt", "--quiet"],
+            cwd=project_dir, capture_output=True, text=True, timeout=60,
         )
         if install.returncode != 0:
             install_note = "npm install failed, tests may not run correctly."
