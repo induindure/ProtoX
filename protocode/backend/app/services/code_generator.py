@@ -39,7 +39,7 @@ async def generate_code(idea: str, tech_stack: str):
         api_key=os.getenv("GROQ_API_KEY"),
         model="openai/gpt-oss-120b",
         temperature=0.5,
-        max_tokens=8000,
+        max_tokens=7000,
         reasoning_effort="low",
     )
 

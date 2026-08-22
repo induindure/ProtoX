@@ -9,6 +9,20 @@ from app.routes.services.project_builder import build_project_dir
 from app.routes.services.test_generator import generate_test_file
 from app.routes.services.test_executor import run_pytest, run_jest, cleanup
 
+router = APIRouter()
+
+
+class FileInput(BaseModel):
+    path: str
+    content: str
+
+
+class TestRequest(BaseModel):
+    files: List[FileInput]
+    project_name: str
+    tech_stack: str
+
+
 @router.post("/store-project")
 async def store_project(request: TestRequest):
     project_id = save_project({
@@ -26,16 +40,6 @@ async def get_project_endpoint(project_id: str):
         return {"error": "Project not found or expired"}
     return project
 
-router = APIRouter()
-
-class FileInput(BaseModel):
-    path: str
-    content: str
-
-class TestRequest(BaseModel):
-    files: List[FileInput]
-    project_name: str
-    tech_stack: str
 
 @router.post("/test")
 async def run_tests(request: TestRequest):

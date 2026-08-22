@@ -16,12 +16,13 @@ export default function App() {
   const outputRef = useRef(null)  // 👈 ref for auto-scroll
 
   useEffect(() => {
-    const stored = sessionStorage.getItem('protox_project')
-    if (stored) {
+    const params = new URLSearchParams(window.location.search)
+    const ideaParam = params.get('idea')
+    if (ideaParam) {
       try {
-        setProject(JSON.parse(stored))
+        setIdea(JSON.parse(decodeURIComponent(ideaParam)))
       } catch {
-        setError('Could not load project from ProtoCode.')
+        setError('Could not load idea from ProtoIdea.')
       }
     }
   }, [])
