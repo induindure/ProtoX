@@ -62,7 +62,8 @@ async def generate_test_file(files: list, runner: str) -> str:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Project files:\n\n{file_dump}"},
         ],
-        max_tokens=1500,
+        max_tokens=3000,
+        reasoning_effort="low",
     )
 
     raw = response.choices[0].message.content.strip()
