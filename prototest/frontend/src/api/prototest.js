@@ -10,3 +10,12 @@ export const runTests = async (files, projectName, techStack) => {
   })
   return response.data
 }
+
+export const autoFix = async (files, projectName, techStack) => {
+  const response = await axios.post(`${BASE_URL}/auto-fix`, {
+    files,
+    project_name: projectName,
+    tech_stack: techStack,
+  })
+  return response.data
+}

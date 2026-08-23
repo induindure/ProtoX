@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import IdeaPanel from './components/IdeaPanel'
 import TechSelector from './components/TechSelector'
+import DatabaseUrlInput from './components/DatabaseUrlInput'
 import FileTree from './components/FileTree'
 import CodeOutput from './components/CodeOutput'
 import { generateCode } from './api/protocode'
@@ -8,6 +9,7 @@ import { generateCode } from './api/protocode'
 export default function App() {
   const [idea, setIdea] = useState(null)
   const [techStack, setTechStack] = useState('')
+  const [databaseUrl, setDatabaseUrl] = useState('')
   const [result, setResult] = useState(null)
   const [selectedFile, setSelectedFile] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -50,7 +52,7 @@ export default function App() {
         Target Users: ${idea.target_users}
         Core Features: ${idea.features.join(', ')}
       `.trim()
-      const data = await generateCode(ideaSummary, techStack)
+      const data = await generateCode(ideaSummary, techStack, databaseUrl)
       setResult(data)
       if (data.files?.length > 0) setSelectedFile(data.files[0])
     } catch {
@@ -137,6 +139,7 @@ export default function App() {
 
         <IdeaPanel idea={idea} />
         <TechSelector techStack={techStack} setTechStack={setTechStack} />
+        <DatabaseUrlInput databaseUrl={databaseUrl} setDatabaseUrl={setDatabaseUrl} />
 
         {error && (
           <p style={{ color: 'var(--accent)', fontSize: '0.85rem', fontWeight: 500 }}>{error}</p>

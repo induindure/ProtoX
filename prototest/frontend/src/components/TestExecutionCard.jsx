@@ -43,7 +43,23 @@ export default function TestExecutionCard({ execution }) {
 
       {execution.install_note && (
         <div style={{ padding: '0.6rem 1.25rem', fontSize: '0.8rem', color: '#854d0e', background: '#fef9c3' }}>
-          ℹ️ {execution.install_note}
+          <div>ℹ️ {execution.install_note}</div>
+          {execution.install_error && (
+            <pre style={{
+              fontSize: '0.75rem',
+              marginTop: '0.5rem',
+              marginBottom: 0,
+              background: '#fffbeb',
+              border: '1px solid #fde68a',
+              borderRadius: '6px',
+              padding: '0.6rem',
+              overflowX: 'auto',
+              whiteSpace: 'pre-wrap',
+              color: '#78350f',
+            }}>
+              {execution.install_error}
+            </pre>
+          )}
         </div>
       )}
 

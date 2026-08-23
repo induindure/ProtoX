@@ -8,11 +8,12 @@ router = APIRouter()
 class CodeRequest(BaseModel):
     idea: str
     tech_stack: str
+    database_url: str | None = None
 
 @router.post("/generate-code")
 async def generate_code_endpoint(request: CodeRequest):
     try:
-        result = await generate_code(request.idea, request.tech_stack)
+        result = await generate_code(request.idea, request.tech_stack, request.database_url)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

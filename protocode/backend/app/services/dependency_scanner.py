@@ -32,6 +32,7 @@ def scan_python_dependencies(files: list) -> set:
     files: list of {"path": str, "content": str} dicts (backend .py files)
     Returns a set of pip package names actually imported in the code.
     """
+    local_names = _collect_local_module_names(files)
     packages = set()
 
     for file in files:
@@ -46,20 +47,45 @@ def scan_python_dependencies(files: list) -> set:
             if isinstance(node, ast.Import):
                 for alias in node.names:
                     top_level = alias.name.split(".")[0]
-                    _add_package(top_level, packages)
+                    _add_package(top_level, packages, local_names)
             elif isinstance(node, ast.ImportFrom):
                 if node.module:
                     top_level = node.module.split(".")[0]
-                    _add_package(top_level, packages)
+                    _add_package(top_level, packages, local_names)
 
     return packages
 
 
-def _add_package(module_name: str, packages: set):
+def _collect_local_module_names(files: list) -> set:
+    """
+    Names that resolve to the project's own code, not an installable package:
+    the stem of every .py file (database.py -> "database") and every folder
+    that contains one (routers/auth.py -> "routers"). Generated projects
+    routinely import their own files with absolute imports (`import database`,
+    `from routers import auth`), which otherwise look identical to a real
+    third-party import to an AST-based scanner.
+    """
+    names = set()
+    for file in files:
+        if not file["path"].endswith(".py"):
+            continue
+        parts = file["path"].split("/")
+        stem = parts[-1][:-3]  # strip ".py"
+        if stem != "__init__":
+            names.add(stem)
+        for part in parts[:-1]:
+            if part not in ("backend", "frontend"):
+                names.add(part)
+    return names
+
+
+def _add_package(module_name: str, packages: set, local_names: set):
     if module_name in STDLIB_MODULES:
         return
     if module_name.startswith("."):
-        return  # relative import, part of the project itself
+        return
+    if module_name in local_names:
+        return
     packages.add(IMPORT_TO_PACKAGE.get(module_name, module_name))
 
 

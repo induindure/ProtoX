@@ -24,19 +24,35 @@ def run_pytest(project_dir: Path, test_code: str) -> dict:
 
     req_file = backend_dir / "requirements.txt"
     install_note = None
+    install_error = None
+
+    test_env = os.environ.copy()
+    test_env["DATABASE_URL"] = "sqlite:///./test_generated.db"
 
     if req_file.exists():
+        # Install into a scratch dir INSIDE this run's own temp project_dir, never into
+        # the ProtoTest server's own venv (sys.executable is the live server process —
+        # installing a generated project's requirements there would mutate/downgrade the
+        # server's own fastapi/pydantic/etc mid-flight). Prepending it to PYTHONPATH makes
+        # it take precedence over the base venv for this subprocess only.
+        isolated_deps_dir = project_dir / ".protoTest_deps"
+        isolated_deps_dir.mkdir(exist_ok=True)
+
         install = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "-r", str(req_file), "--quiet"],
+            [sys.executable, "-m", "pip", "install", "-r", str(req_file),
+             "--target", str(isolated_deps_dir), "--quiet"],
             cwd=project_dir, capture_output=True, text=True, timeout=60,
         )
         if install.returncode != 0:
             install_note = "Dependency install failed, running with base environment."
+            install_error = install.stderr[-2000:]
+        else:
+            existing_pythonpath = test_env.get("PYTHONPATH", "")
+            test_env["PYTHONPATH"] = str(isolated_deps_dir) + (
+                os.pathsep + existing_pythonpath if existing_pythonpath else ""
+            )
     else:
         install_note = "No requirements.txt found, running with base environment."
-
-    test_env = os.environ.copy()
-    test_env["DATABASE_URL"] = "sqlite:///./test_generated.db"
 
     try:
         result = subprocess.run(
@@ -49,6 +65,7 @@ def run_pytest(project_dir: Path, test_code: str) -> dict:
             "stdout": result.stdout[-4000:],
             "stderr": result.stderr[-2000:],
             "install_note": install_note,
+            "install_error": install_error,
         }
     except subprocess.TimeoutExpired:
         return {
@@ -57,15 +74,19 @@ def run_pytest(project_dir: Path, test_code: str) -> dict:
             "stdout": "",
             "stderr": "Test run timed out after 30 seconds.",
             "install_note": install_note,
+            "install_error": install_error,
         }
 
 
 def run_jest(project_dir: Path, test_code: str) -> dict:
+    # npm install already runs into project_dir/node_modules — a fresh temp dir per
+    # run — so this side has no shared-environment risk the way pip/sys.executable does.
     test_file = project_dir / "generated.test.js"
     test_file.write_text(test_code, encoding="utf-8")
 
     pkg_file = project_dir / "package.json"
     install_note = None
+    install_error = None
 
     if pkg_file.exists():
         install = subprocess.run(
@@ -74,6 +95,7 @@ def run_jest(project_dir: Path, test_code: str) -> dict:
         )
         if install.returncode != 0:
             install_note = "npm install failed, tests may not run correctly."
+            install_error = install.stderr[-2000:]
     else:
         install_note = "No package.json found, cannot install dependencies."
         return {
@@ -82,6 +104,7 @@ def run_jest(project_dir: Path, test_code: str) -> dict:
             "stdout": "",
             "stderr": "Skipped: no package.json in generated project.",
             "install_note": install_note,
+            "install_error": install_error,
         }
 
     try:
@@ -95,6 +118,7 @@ def run_jest(project_dir: Path, test_code: str) -> dict:
             "stdout": result.stdout[-4000:],
             "stderr": result.stderr[-2000:],
             "install_note": install_note,
+            "install_error": install_error,
         }
     except subprocess.TimeoutExpired:
         return {
@@ -103,6 +127,7 @@ def run_jest(project_dir: Path, test_code: str) -> dict:
             "stdout": "",
             "stderr": "Test run timed out after 30 seconds.",
             "install_note": install_note,
+            "install_error": install_error,
         }
 
 

@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react'
-import { runTests } from './api/prototest'
+import { runTests, autoFix } from './api/prototest'
 import SummaryBar from './components/SummaryBar'
 import FileResultCard from './components/FileResultCard'
 import TestExecutionCard from './components/TestExecutionCard'
+import FixHistoryCard from './components/FixHistoryCard'
 
 export default function App() {
   const [project, setProject] = useState(null)
   const [report, setReport] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [autoFixing, setAutoFixing] = useState(false)
+  const [fixHistory, setFixHistory] = useState(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -32,6 +35,7 @@ export default function App() {
     setLoading(true)
     setError('')
     setReport(null)
+    setFixHistory(null)
     try {
       const data = await runTests(project.files, project.project_name, project.tech_stack)
       setReport(data)
@@ -41,6 +45,40 @@ export default function App() {
       setLoading(false)
     }
   }
+
+  const handleAutoFix = async () => {
+    if (!project) return
+    setAutoFixing(true)
+    setError('')
+    try {
+      const data = await autoFix(project.files, project.project_name, project.tech_stack)
+      setProject({ ...project, files: data.files })
+      setFixHistory(data)
+      setReport({
+        project_name: data.project_name,
+        tech_stack: data.tech_stack,
+        summary: {
+          total: data.final_syntax_results.length,
+          syntax_failed: data.final_syntax_results.filter(r => r.syntax.status === 'fail').length,
+          tests_passed: data.final_test_execution ? !!data.final_test_execution.passed : false,
+        },
+        syntax_results: data.final_syntax_results,
+        test_execution: data.final_test_execution || {
+          ran: false,
+          reason: 'Tests were not run because syntax errors remained unresolved.',
+        },
+      })
+    } catch {
+      setError('Auto-fix failed. Make sure the ProtoTest backend is running on port 8002.')
+    } finally {
+      setAutoFixing(false)
+    }
+  }
+
+  const hasFailures = report && (
+    report.summary.syntax_failed > 0 ||
+    (report.test_execution.ran && !report.test_execution.passed)
+  )
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
@@ -120,24 +158,47 @@ export default function App() {
 
         {error && <p style={{ color: 'var(--accent)', fontSize: '0.85rem', fontWeight: 500 }}>{error}</p>}
 
-        <button
-          onClick={handleTest}
-          disabled={loading || !project}
-          style={{
-            alignSelf: 'flex-start',
-            padding: '0.65rem 2rem',
-            background: loading || !project ? '#ccc' : 'var(--accent)',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '6px',
-            fontWeight: 700,
-            fontSize: '0.95rem',
-            cursor: loading || !project ? 'not-allowed' : 'pointer',
-            transition: 'background 0.2s',
-          }}
-        >
-          {loading ? 'Running Tests...' : 'Run Tests'}
-        </button>
+        <div style={{ display: 'flex', gap: '0.75rem' }}>
+          <button
+            onClick={handleTest}
+            disabled={loading || autoFixing || !project}
+            style={{
+              alignSelf: 'flex-start',
+              padding: '0.65rem 2rem',
+              background: loading || autoFixing || !project ? '#ccc' : 'var(--accent)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '6px',
+              fontWeight: 700,
+              fontSize: '0.95rem',
+              cursor: loading || autoFixing || !project ? 'not-allowed' : 'pointer',
+              transition: 'background 0.2s',
+            }}
+          >
+            {loading ? 'Running Tests...' : 'Run Tests'}
+          </button>
+
+          {hasFailures && (
+            <button
+              onClick={handleAutoFix}
+              disabled={loading || autoFixing || !project}
+              style={{
+                alignSelf: 'flex-start',
+                padding: '0.65rem 2rem',
+                background: loading || autoFixing || !project ? '#ccc' : 'transparent',
+                color: loading || autoFixing || !project ? '#fff' : 'var(--accent)',
+                border: '2px solid var(--accent)',
+                borderRadius: '6px',
+                fontWeight: 700,
+                fontSize: '0.95rem',
+                cursor: loading || autoFixing || !project ? 'not-allowed' : 'pointer',
+                transition: 'background 0.2s',
+              }}
+            >
+              {autoFixing ? 'Fixing & Retesting...' : 'Auto-Fix & Retest'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Results */}
@@ -149,6 +210,7 @@ export default function App() {
             techStack={report.tech_stack}
           />
           <div style={{ padding: '1.5rem 2rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {fixHistory && <FixHistoryCard data={fixHistory} />}
             <TestExecutionCard execution={report.test_execution} />
             {report.syntax_results.map((r) => (
               <FileResultCard key={r.path} result={r} />

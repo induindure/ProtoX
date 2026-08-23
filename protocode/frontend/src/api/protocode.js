@@ -2,10 +2,11 @@ import axios from 'axios'
 
 const BASE_URL = 'http://localhost:8001/api'
 
-export const generateCode = async (idea, techStack) => {
+export const generateCode = async (idea, techStack, databaseUrl) => {
   const response = await axios.post(`${BASE_URL}/generate-code`, {
     idea: idea,
     tech_stack: techStack,
+    database_url: databaseUrl || null,
   })
   return response.data
 }

@@ -6,6 +6,8 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from app.services.file_builder import build_file_tree
 from app.services.dependency_scanner import build_requirements_txt
 from app.services.typing_fixer import fix_missing_typing_imports
+from app.services.pydantic_fixer import fix_pydantic_v2_settings_import
+from app.services.env_builder import apply_database_url
 
 load_dotenv()
 
@@ -32,10 +34,16 @@ Requirements:
 - Write real, working code with actual logic — not placeholder comments
 - Include at least one authentication-related file (login route or auth middleware)
 - Include a .env.example file
+- If a specific Database URL is given in the user message, use that exact connection string
+  in the database config file and .env.example — do not invent a different one. If none is
+  given, default to a local SQLite database for simplicity.
+- Use Pydantic v2 syntax. For settings/config classes, import BaseSettings from the
+  "pydantic_settings" package (`from pydantic_settings import BaseSettings`), NOT from
+  "pydantic" directly — BaseSettings was removed from the main pydantic package in v2.
 - Do not generate the same boilerplate for every project — tailor code specifically to the described app
 """
 
-async def generate_code(idea: str, tech_stack: str):
+async def generate_code(idea: str, tech_stack: str, database_url: str | None = None):
     llm = ChatGroq(
         api_key=os.getenv("GROQ_API_KEY"),
         model="openai/gpt-oss-120b",
@@ -44,9 +52,13 @@ async def generate_code(idea: str, tech_stack: str):
         reasoning_effort="low",
     )
 
+    user_content = f"App idea:\n{idea}\n\nTech stack: {tech_stack}"
+    if database_url:
+        user_content += f"\n\nDatabase URL to use exactly as given (do not invent a different one): {database_url}"
+
     messages = [
         SystemMessage(content=SYSTEM_PROMPT),
-        HumanMessage(content=f"App idea:\n{idea}\n\nTech stack: {tech_stack}")
+        HumanMessage(content=user_content)
     ]
 
     response = await llm.ainvoke(messages)
@@ -83,6 +95,7 @@ async def generate_code(idea: str, tech_stack: str):
     # Deterministically build requirements.txt from actual imports,
     # instead of relying on the LLM to remember every dependency
     parsed["files"] = fix_missing_typing_imports(parsed["files"])
+    parsed["files"] = fix_pydantic_v2_settings_import(parsed["files"])
     if "FastAPI" in tech_stack or "Django" in tech_stack:
         backend_framework = "FastAPI" if "FastAPI" in tech_stack else "Django"
         req_content = build_requirements_txt(parsed["files"], backend_framework)
@@ -95,6 +108,8 @@ async def generate_code(idea: str, tech_stack: str):
             backend_file = next((f for f in parsed["files"] if f["path"].startswith("backend/")), None)
             req_path = "backend/requirements.txt" if backend_file else "requirements.txt"
             parsed["files"].append({"path": req_path, "content": req_content})
+
+    parsed["files"] = apply_database_url(parsed["files"], database_url)
 
     parsed["file_tree"] = build_file_tree(parsed["files"])
     return parsed

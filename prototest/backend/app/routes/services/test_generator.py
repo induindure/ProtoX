@@ -8,6 +8,8 @@ from dotenv import load_dotenv
 from pathlib import Path
 import re
 
+from app.routes.services.llm_utils import strip_code_fences
+
 load_dotenv()
 
 PYTEST_SYSTEM_PROMPT = """
@@ -82,18 +84,7 @@ async def generate_test_file(files: list, runner: str) -> str:
     )
 
     raw = response.choices[0].message.content.strip()
-
-    if raw.startswith("```"):
-        raw = raw.split("```")[1]
-        if raw.startswith("python") or raw.startswith("javascript") or raw.startswith("js"):
-            raw = raw.split("\n", 1)[1]
-
-    raw = raw.strip()
-    if raw.endswith("```"):
-        raw = raw.rsplit("```", 1)[0]
-
-    raw = raw.strip()
-    return raw
+    return strip_code_fences(raw)
 
 def _is_backend_file(path: str, runner: str) -> bool:
     if runner == "pytest":
