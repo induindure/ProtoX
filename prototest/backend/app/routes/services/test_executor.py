@@ -79,23 +79,21 @@ def run_pytest(project_dir: Path, test_code: str) -> dict:
 
 
 def run_jest(project_dir: Path, test_code: str) -> dict:
-    # npm install already runs into project_dir/node_modules — a fresh temp dir per
-    # run — so this side has no shared-environment risk the way pip/sys.executable does.
-    test_file = project_dir / "generated.test.js"
+    backend_dir = project_dir / "backend" if (project_dir / "backend").exists() else project_dir
+
+    test_file = backend_dir / "generated.test.js"
     test_file.write_text(test_code, encoding="utf-8")
 
-    pkg_file = project_dir / "package.json"
+    pkg_file = backend_dir / "package.json"
     install_note = None
-    install_error = None
 
     if pkg_file.exists():
         install = subprocess.run(
-            ["npm", "install", "--silent"],
-            cwd=project_dir, capture_output=True, text=True, timeout=90,
+            ["npm.cmd", "install", "--silent"],
+            cwd=backend_dir, capture_output=True, text=True, timeout=90,
         )
         if install.returncode != 0:
             install_note = "npm install failed, tests may not run correctly."
-            install_error = install.stderr[-2000:]
     else:
         install_note = "No package.json found, cannot install dependencies."
         return {
@@ -104,13 +102,21 @@ def run_jest(project_dir: Path, test_code: str) -> dict:
             "stdout": "",
             "stderr": "Skipped: no package.json in generated project.",
             "install_note": install_note,
-            "install_error": install_error,
         }
+
+    test_env = os.environ.copy()
+    test_env["DATABASE_URL"] = "sqlite:///./test_generated.db"
+    test_env["DB_URL"] = "sqlite:///./test_generated.db"
+    test_env["POSTGRES_USER"] = "test"
+    test_env["POSTGRES_PASSWORD"] = "test"
+    test_env["POSTGRES_HOST"] = "localhost"
+    test_env["POSTGRES_PORT"] = "5432"
+    test_env["POSTGRES_DB"] = "test_db"
 
     try:
         result = subprocess.run(
-            ["npx", "jest", "generated.test.js", "--verbose"],
-            cwd=project_dir, capture_output=True, text=True, timeout=30,
+            ["npx.cmd", "jest", "generated.test.js", "--verbose"],
+            cwd=backend_dir, capture_output=True, text=True, timeout=30, env=test_env,
         )
         return {
             "runner": "jest",
@@ -118,7 +124,6 @@ def run_jest(project_dir: Path, test_code: str) -> dict:
             "stdout": result.stdout[-4000:],
             "stderr": result.stderr[-2000:],
             "install_note": install_note,
-            "install_error": install_error,
         }
     except subprocess.TimeoutExpired:
         return {
@@ -127,7 +132,6 @@ def run_jest(project_dir: Path, test_code: str) -> dict:
             "stdout": "",
             "stderr": "Test run timed out after 30 seconds.",
             "install_note": install_note,
-            "install_error": install_error,
         }
 
 
