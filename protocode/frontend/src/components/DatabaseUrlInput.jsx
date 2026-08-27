@@ -10,14 +10,13 @@ export default function DatabaseUrlInput({ databaseUrl, setDatabaseUrl }) {
       }}>
         Database URL{' '}
         <span style={{ textTransform: 'none', fontWeight: 400, color: 'var(--text-muted)' }}>
-          (optional)
         </span>
       </label>
       <input
         type="text"
         value={databaseUrl}
         onChange={(e) => setDatabaseUrl(e.target.value)}
-        placeholder="postgresql://user:password@host:5432/dbname — leave blank for a default SQLite database"
+        placeholder="postgresql://user:password@host:5432/dbname"
         style={{
           padding: '0.6rem 0.85rem',
           borderRadius: '8px',
