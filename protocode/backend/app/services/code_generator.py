@@ -42,6 +42,7 @@ Requirements:
   "pydantic_settings" package (`from pydantic_settings import BaseSettings`), NOT from
   "pydantic" directly — BaseSettings was removed from the main pydantic package in v2.
 - Do not generate the same boilerplate for every project — tailor code specifically to the described app
+- For password hashing in Node/Express projects, always use "bcryptjs" (NOT "bcrypt") — bcrypt requires native compilation which fails in many environments, bcryptjs is a pure-JS drop-in replacement with the identical API.
 """
 
 

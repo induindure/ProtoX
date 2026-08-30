@@ -29,17 +29,34 @@ Include at least 3 test functions covering the main functionality.
 
 JEST_SYSTEM_PROMPT = """
 You are a senior backend engineer writing jest tests for a Node/Express project.
-You will be given the full contents of a generated project's files.
+You will be given the full contents of a generated project's files, with paths like "backend/models/User.js".
+
+IMPORTANT: Your test file will be placed directly inside the "backend" folder,
+at the same level as "models/", "routes/", "middleware/", etc. So if you see a
+file at "backend/models/User.js", require/import it as "./models/User.js" —
+NOT "../models/User.js". Strip the "backend/" prefix and treat paths as
+relative to the backend folder itself, one level down (e.g. "./routes/auth.js",
+"./models/User.js"), never one level up.
 
 Write ONE jest test file that imports/requires the real modules shown to you
-(use the exact file paths and names given — do not invent filenames) and tests
-the main routes/functions with realistic inputs.
+and tests the main routes/functions with realistic inputs.
 
 Return ONLY raw JavaScript test code. No markdown, no explanation, no backticks.
 Include at least 3 test cases covering the main functionality.
 """
 
 import re
+
+def _strip_env_overrides(code: str) -> str:
+    """
+    Removes any 'process.env.DATABASE_URL = ...' or 'process.env.DB_URL = ...'
+    lines the LLM writes into the test file — these override the real env vars
+    our test harness sets, causing a mismatch between what the harness intends
+    and what the test actually runs against.
+    """
+    code = re.sub(r'^\s*process\.env\.DATABASE_URL\s*=.*\n?', '', code, flags=re.MULTILINE)
+    code = re.sub(r'^\s*process\.env\.DB_URL\s*=.*\n?', '', code, flags=re.MULTILINE)
+    return code
 
 def _strip_backend_prefix(code: str) -> str:
     """
@@ -84,7 +101,12 @@ async def generate_test_file(files: list, runner: str) -> str:
     )
 
     raw = response.choices[0].message.content.strip()
-    return strip_code_fences(raw)
+    raw = strip_code_fences(raw)
+
+    if runner == "jest":
+        raw = _strip_env_overrides(raw)
+
+    return raw
 
 def _is_backend_file(path: str, runner: str) -> bool:
     if runner == "pytest":

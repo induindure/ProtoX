@@ -57,7 +57,13 @@ def run_pytest(project_dir: Path, test_code: str) -> dict:
     try:
         result = subprocess.run(
             [sys.executable, "-m", "pytest", "test_generated.py", "-v", "--tb=short"],
-            cwd=project_dir, capture_output=True, text=True, timeout=30, env=test_env,
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+            env=test_env,
         )
         return {
             "runner": "pytest",
@@ -89,11 +95,21 @@ def run_jest(project_dir: Path, test_code: str) -> dict:
 
     if pkg_file.exists():
         install = subprocess.run(
-            ["npm.cmd", "install", "--silent"],
+            ["npm.cmd" if sys.platform == "win32" else "npm", "install", "--silent"],
             cwd=backend_dir, capture_output=True, text=True, timeout=90,
         )
         if install.returncode != 0:
-            install_note = "npm install failed, tests may not run correctly."
+            error_detail = (install.stderr or install.stdout or "").strip()[-800:]
+            install_note = f"npm install failed: {error_detail}" if error_detail else "npm install failed, tests may not run correctly."
+        else:
+            # ensure jest itself is available, regardless of whether the
+            # generated project's package.json happened to include it
+            jest_install = subprocess.run(
+                ["npm.cmd" if sys.platform == "win32" else "npm", "install", "--no-save", "--silent", "jest", "supertest"],
+                cwd=backend_dir, capture_output=True, text=True, timeout=60,
+            )
+            if jest_install.returncode != 0:
+                install_note = "Could not install jest for testing."
     else:
         install_note = "No package.json found, cannot install dependencies."
         return {
@@ -105,8 +121,8 @@ def run_jest(project_dir: Path, test_code: str) -> dict:
         }
 
     test_env = os.environ.copy()
-    test_env["DATABASE_URL"] = "sqlite:///./test_generated.db"
-    test_env["DB_URL"] = "sqlite:///./test_generated.db"
+    test_env["DATABASE_URL"] = "postgres://test:test@localhost:5432/test_db"
+    test_env["DB_URL"] = "postgres://test:test@localhost:5432/test_db"
     test_env["POSTGRES_USER"] = "test"
     test_env["POSTGRES_PASSWORD"] = "test"
     test_env["POSTGRES_HOST"] = "localhost"
@@ -115,8 +131,14 @@ def run_jest(project_dir: Path, test_code: str) -> dict:
 
     try:
         result = subprocess.run(
-            ["npx.cmd", "jest", "generated.test.js", "--verbose"],
-            cwd=backend_dir, capture_output=True, text=True, timeout=30, env=test_env,
+            ["npx.cmd" if sys.platform == "win32" else "npx", "jest", "generated.test.js", "--verbose"],
+            cwd=backend_dir,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+            env=test_env,
         )
         return {
             "runner": "jest",
