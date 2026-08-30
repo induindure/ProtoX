@@ -62,6 +62,25 @@ export default function App() {
     }
   }
 
+  const handleSendToPreview = async () => {
+    try {
+      const response = await fetch('http://localhost:8003/api/store-project', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          files: result.files,
+          project_name: result.project_name,
+          tech_stack: techStack,
+          database_url: databaseUrl || null,
+        }),
+      })
+      const data = await response.json()
+      window.open(`http://localhost:5176/?id=${data.project_id}`, '_blank')
+    } catch {
+      setError('Could not send project to Preview.')
+    }
+  }
+
   const handleFileClick = (filePath) => {
     const file = result?.files.find(f => f.path === filePath)
     if (file) setSelectedFile(file)
@@ -205,6 +224,26 @@ export default function App() {
               onMouseOut={e => e.target.style.background = '#16a34a'}
             >
               Send to ProtoTest →
+            </button>
+            <button
+              onClick={handleSendToPreview}
+              style={{
+                padding: '0.5rem 1.4rem',
+                background: '#2563eb',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '6px',
+                fontWeight: 700,
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                letterSpacing: '0.03em',
+                marginLeft: '0.75rem',
+                transition: 'background 0.2s',
+              }}
+              onMouseOver={e => e.target.style.background = '#1d4ed8'}
+              onMouseOut={e => e.target.style.background = '#2563eb'}
+            >
+              Preview App →
             </button>
           </div>
 

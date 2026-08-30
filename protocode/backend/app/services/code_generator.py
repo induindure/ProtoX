@@ -11,6 +11,7 @@ from app.services.env_builder import apply_database_url
 
 load_dotenv()
 
+
 SYSTEM_PROMPT = """
 You are a senior software engineer. Given an app idea and a tech stack, generate a complete, realistic starter project.
 
@@ -43,7 +44,57 @@ Requirements:
 - Do not generate the same boilerplate for every project — tailor code specifically to the described app
 """
 
-async def generate_code(idea: str, tech_stack: str, database_url: str | None = None):
+
+def fix_react_package_json(files: list[dict]) -> list[dict]:
+    """
+    Deterministically fixes React package.json files.
+
+    The LLM sometimes generates:
+        "start": "react-scripts start"
+
+    without adding react-scripts to dependencies.
+
+    This function ensures CRA projects always have the dependency they need.
+    """
+
+    for file in files:
+        path = file.get("path", "")
+
+        if not path.endswith("package.json"):
+            continue
+
+        try:
+            package_data = json.loads(file.get("content", "{}"))
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+        dependencies = package_data.setdefault("dependencies", {})
+        scripts = package_data.get("scripts", {})
+
+        # If the generated project uses react-scripts,
+        # make sure react-scripts is actually installed.
+        uses_react_scripts = any(
+            "react-scripts" in str(command)
+            for command in scripts.values()
+        )
+
+        if uses_react_scripts:
+            dependencies["react-scripts"] = "5.0.1"
+
+        # Write the corrected package.json back.
+        file["content"] = json.dumps(
+            package_data,
+            indent=2
+        )
+
+    return files
+
+
+async def generate_code(
+    idea: str,
+    tech_stack: str,
+    database_url: str | None = None
+):
     llm = ChatGroq(
         api_key=os.getenv("GROQ_API_KEY"),
         model="openai/gpt-oss-120b",
@@ -53,8 +104,12 @@ async def generate_code(idea: str, tech_stack: str, database_url: str | None = N
     )
 
     user_content = f"App idea:\n{idea}\n\nTech stack: {tech_stack}"
+
     if database_url:
-        user_content += f"\n\nDatabase URL to use exactly as given (do not invent a different one): {database_url}"
+        user_content += (
+            f"\n\nDatabase URL to use exactly as given "
+            f"(do not invent a different one): {database_url}"
+        )
 
     messages = [
         SystemMessage(content=SYSTEM_PROMPT),
@@ -62,15 +117,25 @@ async def generate_code(idea: str, tech_stack: str, database_url: str | None = N
     ]
 
     response = await llm.ainvoke(messages)
-    print("RAW RESPONSE CONTENT:", repr(response.content))
-    print("RESPONSE METADATA:", response.response_metadata)
+
+    print(
+        "RAW RESPONSE CONTENT:",
+        repr(response.content)
+    )
+
+    print(
+        "RESPONSE METADATA:",
+        response.response_metadata
+    )
 
     raw = response.content.strip()
 
     if raw.startswith("```"):
         raw = raw.split("```")[1]
+
         if raw.startswith("json"):
             raw = raw[4:]
+
     raw = raw.strip()
 
     print("RAW LENGTH:", len(raw))
@@ -78,38 +143,136 @@ async def generate_code(idea: str, tech_stack: str, database_url: str | None = N
 
     try:
         parsed = json.loads(raw)
+
     except json.JSONDecodeError:
+
         repair_messages = [
-            SystemMessage(content="You output broken JSON. Return ONLY the corrected, valid JSON — no markdown, no explanation."),
+            SystemMessage(
+                content=(
+                    "You output broken JSON. "
+                    "Return ONLY the corrected, valid JSON — "
+                    "no markdown, no explanation."
+                )
+            ),
             HumanMessage(content=raw),
         ]
-        repair_response = await llm.ainvoke(repair_messages)
+
+        repair_response = await llm.ainvoke(
+            repair_messages
+        )
+
         repaired = repair_response.content.strip()
+
         if repaired.startswith("```"):
             repaired = repaired.split("```")[1]
+
             if repaired.startswith("json"):
                 repaired = repaired[4:]
-        parsed = json.loads(repaired.strip())
 
-    print("PARSED KEYS:", list(parsed.keys()))
-    # Deterministically build requirements.txt from actual imports,
-    # instead of relying on the LLM to remember every dependency
-    parsed["files"] = fix_missing_typing_imports(parsed["files"])
-    parsed["files"] = fix_pydantic_v2_settings_import(parsed["files"])
+        parsed = json.loads(
+            repaired.strip()
+        )
+
+    print(
+        "PARSED KEYS:",
+        list(parsed.keys())
+    )
+
+    # ---------------------------------------------------------
+    # Deterministic Python fixes
+    # ---------------------------------------------------------
+
+    parsed["files"] = fix_missing_typing_imports(
+        parsed["files"]
+    )
+
+    parsed["files"] = fix_pydantic_v2_settings_import(
+        parsed["files"]
+    )
+
+    # Fix React package.json dependencies.
+    #
+    # This catches the exact problem we just encountered:
+    # "react-scripts" being used in scripts but missing
+    # from dependencies.
+    if "React" in tech_stack:
+        parsed["files"] = fix_react_package_json(
+            parsed["files"]
+        )
+
+    # ---------------------------------------------------------
+    # Backend requirements
+    # ---------------------------------------------------------
+
     if "FastAPI" in tech_stack or "Django" in tech_stack:
-        backend_framework = "FastAPI" if "FastAPI" in tech_stack else "Django"
-        req_content = build_requirements_txt(parsed["files"], backend_framework)
 
-        existing_req = next((f for f in parsed["files"] if f["path"].endswith("requirements.txt")), None)
+        backend_framework = (
+            "FastAPI"
+            if "FastAPI" in tech_stack
+            else "Django"
+        )
+
+        req_content = build_requirements_txt(
+            parsed["files"],
+            backend_framework
+        )
+
+        existing_req = next(
+            (
+                f
+                for f in parsed["files"]
+                if f["path"].endswith(
+                    "requirements.txt"
+                )
+            ),
+            None
+        )
+
         if existing_req:
             existing_req["content"] = req_content
+
         else:
-            # find the backend folder prefix from an existing backend file, default to "backend/"
-            backend_file = next((f for f in parsed["files"] if f["path"].startswith("backend/")), None)
-            req_path = "backend/requirements.txt" if backend_file else "requirements.txt"
-            parsed["files"].append({"path": req_path, "content": req_content})
+            # Find the backend folder prefix from
+            # an existing backend file.
+            backend_file = next(
+                (
+                    f
+                    for f in parsed["files"]
+                    if f["path"].startswith(
+                        "backend/"
+                    )
+                ),
+                None
+            )
 
-    parsed["files"] = apply_database_url(parsed["files"], database_url)
+            req_path = (
+                "backend/requirements.txt"
+                if backend_file
+                else "requirements.txt"
+            )
 
-    parsed["file_tree"] = build_file_tree(parsed["files"])
+            parsed["files"].append(
+                {
+                    "path": req_path,
+                    "content": req_content
+                }
+            )
+
+    # ---------------------------------------------------------
+    # Database URL
+    # ---------------------------------------------------------
+
+    parsed["files"] = apply_database_url(
+        parsed["files"],
+        database_url
+    )
+
+    # ---------------------------------------------------------
+    # File tree
+    # ---------------------------------------------------------
+
+    parsed["file_tree"] = build_file_tree(
+        parsed["files"]
+    )
+
     return parsed
