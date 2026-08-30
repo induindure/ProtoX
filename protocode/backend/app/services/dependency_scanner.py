@@ -17,6 +17,7 @@ IMPORT_TO_PACKAGE = {
     "bcrypt": "bcrypt",
     "passlib": "passlib[bcrypt]",
     "bson": "pymongo",
+    "rest_framework": "djangorestframework",
 }
 
 # Python stdlib modules — skip these, they don't go in requirements.txt
