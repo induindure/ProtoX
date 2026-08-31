@@ -41,7 +41,7 @@ def run_pytest(project_dir: Path, test_code: str) -> dict:
         install = subprocess.run(
             [sys.executable, "-m", "pip", "install", "-r", str(req_file),
              "--target", str(isolated_deps_dir), "--quiet"],
-            cwd=project_dir, capture_output=True, text=True, timeout=60,
+            cwd=project_dir, capture_output=True, text=True, timeout=180,
         )
         if install.returncode != 0:
             install_note = "Dependency install failed, running with base environment."
