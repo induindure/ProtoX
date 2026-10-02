@@ -212,8 +212,9 @@ def get_frontend_commands(
 
     return {
         "install": [
-            "npm.cmd",
+            "pnpm.cmd",
             "install",
+            "--shamefully-hoist",
         ],
         "run": run_command,
         "env": env,
@@ -232,7 +233,7 @@ def get_backend_commands(
 
     if backend == "FastAPI":
 
-        entry = "app.main:app"
+        entry = _detect_backend_entry(backend_dir, backend)
 
         return {
             "install": [
@@ -246,7 +247,7 @@ def get_backend_commands(
             ],
             "run": [
                 "uvicorn",
-                "app.main:app",
+                entry,
                 "--host",
                 "0.0.0.0",
                 "--port",
@@ -313,10 +314,13 @@ def get_backend_commands(
         )
 
         return {
-            "install": [
-                "npm.cmd",
-                "install",
-            ],
+        "install": [
+            "pnpm.cmd",
+            "install",
+            "--shamefully-hoist",
+            "--config.dangerously-allow-all-builds=true",
+            "--config.strict-dep-builds=false",
+        ],
             "run": run_cmd,
             "env": {
                 "PORT": str(port),

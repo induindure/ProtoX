@@ -33,6 +33,15 @@ async def start_preview(project_id: str):
             detail="Project not found or expired. Please send it again from ProtoCode."
         )
 
+    # If this project is already starting or running, don't rebuild its
+    # files. Rebuilding would wipe out fixes and the venv mid-install.
+    status = process_manager.get_status(project_id)
+    if status and any(
+        status[side]["status"] in ("pending", "installing", "running")
+        for side in ("frontend", "backend")
+    ):
+        return status
+
     database_url = project.get("database_url")
 
     project_dir = project_builder.build_project_dir(

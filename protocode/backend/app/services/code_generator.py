@@ -8,6 +8,8 @@ from app.services.dependency_scanner import build_requirements_txt
 from app.services.typing_fixer import fix_missing_typing_imports
 from app.services.pydantic_fixer import fix_pydantic_v2_settings_import
 from app.services.env_builder import apply_database_url
+from app.services.import_fixer import fix_relative_imports
+from app.services.completeness_checker import fill_missing_files
 
 load_dotenv()
 
@@ -43,6 +45,16 @@ Requirements:
   "pydantic" directly — BaseSettings was removed from the main pydantic package in v2.
 - Do not generate the same boilerplate for every project — tailor code specifically to the described app
 - For password hashing in Node/Express projects, always use "bcryptjs" (NOT "bcrypt") — bcrypt requires native compilation which fails in many environments, bcryptjs is a pure-JS drop-in replacement with the identical API.
+Backend structure rules (FastAPI):
+- All backend code lives in backend/app/. Use only `from . import x` or
+  `from .x import y` for imports between these files. Never use `from ..`.
+- database.py defines the engine, SessionLocal, Base, and get_db. Nothing else defines these.
+- dependencies.py only re-exports and builds on these: it must start with
+  `from .database import get_db`.
+- models.py: SQLAlchemy models only. schemas.py: Pydantic models only.
+  crud.py: database functions only.
+- Every name you import from another backend file must be defined in that file.
+- requirements.txt must list every third-party package imported anywhere.
 """
 
 
@@ -189,6 +201,15 @@ async def generate_code(
 
     parsed["files"] = fix_pydantic_v2_settings_import(
         parsed["files"]
+    )
+
+    parsed["files"] = fix_relative_imports(
+        parsed["files"]
+    )
+
+    parsed["files"] = fill_missing_files(
+        parsed["files"],
+        llm,
     )
 
     # Fix React package.json dependencies.
