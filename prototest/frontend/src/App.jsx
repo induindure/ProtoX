@@ -46,6 +46,25 @@ export default function App() {
     }
   }
 
+  const handleSendToPreview = async () => {
+    try {
+      const response = await fetch('http://localhost:8003/api/store-project', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          files: project.files,
+          project_name: project.project_name,
+          tech_stack: project.tech_stack,
+        }),
+      })
+      if (!response.ok) throw new Error()
+      const data = await response.json()
+      window.open(`http://localhost:5176/?id=${data.project_id}`, '_blank')
+    } catch {
+      setError('Could not send project to Preview.')
+    }
+  }
+
   const handleAutoFix = async () => {
     if (!project) return
     setAutoFixing(true)
@@ -176,6 +195,28 @@ export default function App() {
             }}
           >
             {loading ? 'Running Tests...' : 'Run Tests'}
+          </button>
+
+          <button
+            onClick={handleSendToPreview}
+            disabled={!project}
+            style={{
+              padding: '0.5rem 1.4rem',
+              background: '#2563eb',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '6px',
+              fontWeight: 700,
+              fontSize: '0.85rem',
+              cursor: project ? 'pointer' : 'not-allowed',
+              opacity: project ? 1 : 0.5,
+              letterSpacing: '0.03em',
+              transition: 'background 0.2s',
+            }}
+            onMouseOver={e => { if (project) e.target.style.background = '#1d4ed8' }}
+            onMouseOut={e => { e.target.style.background = '#2563eb' }}
+          >
+            Preview App →
           </button>
 
           {hasFailures && (

@@ -8,6 +8,42 @@ import shutil
 import sys
 from pathlib import Path
 import os
+import re
+
+_DJANGO_SETTINGS_RE = re.compile(
+    r"""DJANGO_SETTINGS_MODULE['"]\s*,\s*['"]([\w.]+)['"]"""
+)
+
+_DJANGO_CONFTEST = '''
+import pytest
+
+
+# Added by ProtoTest: let every generated test use the test database.
+@pytest.fixture(autouse=True)
+def _prototest_enable_db(db):
+    pass
+'''
+
+# Packages Django projects commonly use but often leave out of requirements.txt.
+_DJANGO_TEST_EXTRAS = [
+    "pytest-django",
+    "django",
+    "djangorestframework",
+    "djangorestframework-simplejwt",
+    "django-cors-headers",
+    "dj-database-url",
+]
+
+def _find_django(project_dir: Path):
+    """Finds manage.py anywhere in the project. Returns (django_root, settings_module),
+    or (None, None) if this isn't a Django project."""
+    for manage in project_dir.rglob("manage.py"):
+        if any(part in (".protoTest_deps", "node_modules", ".venv") for part in manage.parts):
+            continue
+        m = _DJANGO_SETTINGS_RE.search(manage.read_text(encoding="utf-8", errors="ignore"))
+        if m:
+            return manage.parent, m.group(1)
+    return None, None
 
 
 def run_pytest(project_dir: Path, test_code: str) -> dict:
@@ -18,51 +54,85 @@ def run_pytest(project_dir: Path, test_code: str) -> dict:
     if not init_file.exists():
         init_file.write_text("", encoding="utf-8")
 
-    # test file goes at project ROOT now, not inside backend/
+    # test file goes at project ROOT, not inside backend/
     test_file = project_dir / "test_generated.py"
     test_file.write_text(test_code, encoding="utf-8")
 
     req_file = backend_dir / "requirements.txt"
+    django_root, settings_module = _find_django(project_dir)
+    is_django = settings_module is not None
+
     install_note = None
     install_error = None
 
     test_env = os.environ.copy()
     test_env["DATABASE_URL"] = "sqlite:///./test_generated.db"
+    pythonpath_parts = []
 
-    if req_file.exists():
-        # Install into a scratch dir INSIDE this run's own temp project_dir, never into
-        # the ProtoTest server's own venv (sys.executable is the live server process —
-        # installing a generated project's requirements there would mutate/downgrade the
-        # server's own fastapi/pydantic/etc mid-flight). Prepending it to PYTHONPATH makes
-        # it take precedence over the base venv for this subprocess only.
+    if req_file.exists() or is_django:
+        # Install into a scratch dir INSIDE this run's temp project_dir, never into
+        # the ProtoTest server's own venv. Prepending it to PYTHONPATH makes it take
+        # precedence over the base venv for this subprocess only.
         isolated_deps_dir = project_dir / ".protoTest_deps"
         isolated_deps_dir.mkdir(exist_ok=True)
 
+        install_cmd = [
+            sys.executable, "-m", "uv", "pip", "install", "-q",
+            "--target", str(isolated_deps_dir),
+            "--python", sys.executable,
+        ]
+        if req_file.exists():
+            install_cmd += ["-r", str(req_file)]
+        if is_django:
+            install_cmd += _DJANGO_TEST_EXTRAS
+
         install = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "-r", str(req_file),
-             "--target", str(isolated_deps_dir), "--quiet"],
-            cwd=project_dir, capture_output=True, text=True, timeout=180,
+            install_cmd, cwd=project_dir, capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=180,
         )
         if install.returncode != 0:
             install_note = "Dependency install failed, running with base environment."
-            install_error = install.stderr[-2000:]
+            install_error = (install.stderr or install.stdout)[-2000:]
         else:
-            existing_pythonpath = test_env.get("PYTHONPATH", "")
-            test_env["PYTHONPATH"] = str(isolated_deps_dir) + (
-                os.pathsep + existing_pythonpath if existing_pythonpath else ""
-            )
+            pythonpath_parts.append(str(isolated_deps_dir))
     else:
         install_note = "No requirements.txt found, running with base environment."
 
+    if is_django:
+        # Make "app.settings" importable and tell Django to use it.
+        pythonpath_parts.append(str(django_root))
+        test_env["DJANGO_SETTINGS_MODULE"] = settings_module
+        install_note = (install_note + " " if install_note else "") + \
+            f"Django project detected (settings: {settings_module})."
+
+        # Enable database access for all generated tests.
+        conftest = project_dir / "conftest.py"
+        existing = conftest.read_text(encoding="utf-8") if conftest.exists() else ""
+        if "_prototest_enable_db" not in existing:
+            conftest.write_text(existing + _DJANGO_CONFTEST, encoding="utf-8")
+
+    existing_pythonpath = test_env.get("PYTHONPATH", "")
+    if existing_pythonpath:
+        pythonpath_parts.append(existing_pythonpath)
+    if pythonpath_parts:
+        test_env["PYTHONPATH"] = os.pathsep.join(pythonpath_parts)
+
+    # Django needs extra time to build its test database.
+    timeout = 90 if is_django else 30
+
+    pytest_cmd = [sys.executable, "-m", "pytest", "test_generated.py", "-v", "--tb=short"]
+    if is_django:
+        pytest_cmd.append("--nomigrations")  # build test tables from models, skip AI-written migrations
+
     try:
         result = subprocess.run(
-            [sys.executable, "-m", "pytest", "test_generated.py", "-v", "--tb=short"],
+            pytest_cmd,
             cwd=project_dir,
             capture_output=True,
             text=True,
             encoding="utf-8",
             errors="replace",
-            timeout=30,
+            timeout=timeout,
             env=test_env,
         )
         return {
@@ -78,7 +148,7 @@ def run_pytest(project_dir: Path, test_code: str) -> dict:
             "runner": "pytest",
             "passed": False,
             "stdout": "",
-            "stderr": "Test run timed out after 30 seconds.",
+            "stderr": f"Test run timed out after {timeout} seconds.",
             "install_note": install_note,
             "install_error": install_error,
         }

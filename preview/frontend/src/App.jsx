@@ -32,7 +32,7 @@ export default function App() {
           borderRadius: '999px',
           letterSpacing: '0.03em',
         }}>
-          ProtoPreview
+          Preview
         </span>
       </header>
 

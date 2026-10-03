@@ -344,7 +344,7 @@ def get_backend_commands(
             ]
 
         # IMPORTANT:
-        # Pass DATABASE_URL from the ProtoPreview
+        # Pass DATABASE_URL from the Preview
         # environment to the generated Node backend.
         database_url = os.environ.get(
             "DATABASE_URL",

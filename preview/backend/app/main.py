@@ -2,14 +2,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes.preview import router
 
-app = FastAPI(title="ProtoPreview API")
+app = FastAPI(title="Preview API")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5174",  # ProtoCode frontend
         "http://localhost:5175",  # ProtoTest frontend
-        "http://localhost:5176",  # ProtoPreview frontend
+        "http://localhost:5176",  # Preview frontend
     ],
     allow_credentials=True,
     allow_methods=["*"],

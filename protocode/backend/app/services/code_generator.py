@@ -14,6 +14,7 @@ from app.services.frontend_checker import fill_missing_frontend_exports
 from app.services.package_json_fixer import fix_package_json_dependencies
 from app.services.provider_fixer import fix_missing_providers
 from app.services.django_auth_fixer import fix_django_auth_views
+from app.services.migration_fixer import drop_generated_migrations
 
 load_dotenv()
 
@@ -74,13 +75,17 @@ Backend rules (Django):
   never import pydantic or pydantic_settings anywhere in a Django project.
 - If you define a custom User model, set AUTH_USER_MODEL = "<app>.User" in settings.py.
 - Read DATABASES from DATABASE_URL using dj-database-url, falling back to SQLite.
-- Every app with models has a migrations/__init__.py.
+- Every app with models has an empty migrations/__init__.py. Never write migration
+  files yourself; they are generated from the models.
 - Use django-cors-headers so the frontend can call the API.
 - With Django REST Framework, register, login and token views must set
   permission_classes = [AllowAny] and authentication_classes = [].
 - Use Django REST Framework serializers (serializers.Serializer / ModelSerializer)
   for all request validation. Never use Pydantic in a Django project.
 - Settings come from django.conf.settings; never use pydantic_settings in Django.
+- In development, allow all CORS origins (Django: CORS_ALLOW_ALL_ORIGINS = True with
+  django-cors-headers; FastAPI: CORSMiddleware with allow_origin_regex=".*";
+  Express: app.use(cors())).
 
 Backend rules (Node/Express):
 - For password hashing always use "bcryptjs", never "bcrypt" (bcrypt needs native compilation).
@@ -293,6 +298,10 @@ async def generate_code(
     # ---------------------------------------------------------
     # Deterministic Python fixes
     # ---------------------------------------------------------
+
+    parsed["files"] = drop_generated_migrations(
+        parsed["files"]
+    )
 
     parsed["files"] = fix_missing_typing_imports(
         parsed["files"]

@@ -684,6 +684,47 @@ def _make_frontend_fixer(state, log, project_root, install_cmd, install_cwd, ins
 
     return on_line
 
+_DJANGO_CORS_BLOCK = '''
+
+# --- added by Preview: allow the preview frontend (random port) to call this API ---
+if "corsheaders" not in INSTALLED_APPS:
+    INSTALLED_APPS = list(INSTALLED_APPS) + ["corsheaders"]
+if "corsheaders.middleware.CorsMiddleware" not in MIDDLEWARE:
+    MIDDLEWARE = ["corsheaders.middleware.CorsMiddleware"] + list(MIDDLEWARE)
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
+ALLOWED_HOSTS = ["*"]
+'''
+
+_FASTAPI_ORIGINS = re.compile(r"allow_origins\s*=\s*(\[[^\]]*\]|[A-Za-z_][\w.]*)")
+
+
+def _fix_cors(backend_dir: Path, log: deque):
+    """Lets the preview frontend, which runs on a random port, call the backend."""
+    for root, dirs, files in os.walk(backend_dir):
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+        for fname in files:
+            if not fname.endswith(".py"):
+                continue
+            path = Path(root) / fname
+            try:
+                text = path.read_text(encoding="utf-8")
+            except Exception:
+                continue
+
+            # Django settings module
+            if "INSTALLED_APPS" in text and "MIDDLEWARE" in text:
+                if "added by Preview: allow the preview frontend" not in text:
+                    path.write_text(text.rstrip() + _DJANGO_CORS_BLOCK, encoding="utf-8")
+                    log.append(f"[backend] opened CORS in {path.relative_to(backend_dir)}")
+
+            # FastAPI CORSMiddleware
+            elif "CORSMiddleware" in text and _FASTAPI_ORIGINS.search(text):
+                new_text = _FASTAPI_ORIGINS.sub('allow_origin_regex=".*"', text)
+                if new_text != text:
+                    path.write_text(new_text, encoding="utf-8")
+                    log.append(f"[backend] opened CORS in {path.relative_to(backend_dir)}")
+
 def _run_side(name: str, cwd: Path, cmds: dict, state: dict):
     log = state["log"]
 
@@ -719,6 +760,7 @@ def _run_side(name: str, cwd: Path, cmds: dict, state: dict):
     # ---------- Python backend preparation ----------
     if name == "backend" and any("pip" in str(p).lower() for p in install_cmd):
         _fix_parent_imports_on_disk(cwd, log)
+        _fix_cors(cwd, log)
         _ensure_router_packages(cwd, log)
         req_file = cwd / "requirements.txt"
         if not req_file.exists():
