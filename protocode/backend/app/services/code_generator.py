@@ -10,12 +10,13 @@ from app.services.pydantic_fixer import fix_pydantic_v2_settings_import
 from app.services.env_builder import apply_database_url
 from app.services.import_fixer import fix_relative_imports
 from app.services.completeness_checker import fill_missing_files
+from app.services.frontend_checker import fill_missing_frontend_exports
 
 load_dotenv()
 
 
 SYSTEM_PROMPT = """
-You are a senior software engineer. Given an app idea and a tech stack, generate a complete, realistic starter project.
+You are a senior software engineer. Given an app idea and a tech stack, generate a complete, realistic, polished project.
 
 Return ONLY a valid JSON object with this exact structure, no extra text, no markdown:
 {
@@ -29,22 +30,31 @@ Return ONLY a valid JSON object with this exact structure, no extra text, no mar
   ]
 }
 
-Requirements:
-- Generate between 12 and 18 files
-- Include: README.md, proper config files, folder structure matching the tech stack
-- For React frontend: include App.jsx, at least 4 components, routing with react-router-dom, one API service file, basic CSS
-- For backend: include main entry point, at least 3 routes, 2 data models, database config, requirements.txt or package.json
-- Write real, working code with actual logic — not placeholder comments
-- Include at least one authentication-related file (login route or auth middleware)
-- Include a .env.example file
-- If a specific Database URL is given in the user message, use that exact connection string
-  in the database config file and .env.example — do not invent a different one. If none is
-  given, default to a local SQLite database for simplicity.
-- Use Pydantic v2 syntax. For settings/config classes, import BaseSettings from the
-  "pydantic_settings" package (`from pydantic_settings import BaseSettings`), NOT from
-  "pydantic" directly — BaseSettings was removed from the main pydantic package in v2.
-- Do not generate the same boilerplate for every project — tailor code specifically to the described app
-- For password hashing in Node/Express projects, always use "bcryptjs" (NOT "bcrypt") — bcrypt requires native compilation which fails in many environments, bcryptjs is a pure-JS drop-in replacement with the identical API.
+General requirements:
+- Generate as many files as the app needs (typically 25-40). Completeness matters more than brevity.
+- Put frontend code under frontend/ and backend code under backend/.
+- Include: README.md, proper config files, .env.example, folder structure matching the tech stack.
+- Write real, working code with actual logic, not placeholder comments.
+- Tailor everything to the described app. Do not generate generic boilerplate.
+- Every name imported from a project file must be defined and exported by that file.
+  Before finishing, check every import in every frontend and backend file.
+
+Configuration and secrets:
+- Never hardcode secrets or connection strings in code. Read them from environment variables.
+- Read the database connection string from DATABASE_URL and the server port from PORT.
+- If a Database URL is given in the user message, put it ONLY in a backend/.env file
+  (DATABASE_URL=...). .env.example must contain placeholder values only.
+- Every setting must have a safe default so the app starts without a .env file
+  (e.g. secret_key: str = "dev-secret-change-me").
+- Use Pydantic v2 syntax. Import BaseSettings from "pydantic_settings"
+  (`from pydantic_settings import BaseSettings`), never from "pydantic".
+
+Backend requirements:
+- Main entry point, routes for every feature (at least 3), at least 2 data models,
+  database config, and requirements.txt or package.json listing every
+  third-party package imported anywhere.
+- Authentication: register, login and protected routes.
+
 Backend structure rules (FastAPI):
 - All backend code lives in backend/app/. Use only `from . import x` or
   `from .x import y` for imports between these files. Never use `from ..`.
@@ -53,8 +63,38 @@ Backend structure rules (FastAPI):
   `from .database import get_db`.
 - models.py: SQLAlchemy models only. schemas.py: Pydantic models only.
   crud.py: database functions only.
-- Every name you import from another backend file must be defined in that file.
-- requirements.txt must list every third-party package imported anywhere.
+
+Backend rules (Django):
+- If you define a custom User model, set AUTH_USER_MODEL = "<app>.User" in settings.py.
+- Read DATABASES from DATABASE_URL using dj-database-url, falling back to SQLite.
+- Every app with models has a migrations/__init__.py.
+- Use django-cors-headers so the frontend can call the API.
+
+Backend rules (Node/Express):
+- For password hashing always use "bcryptjs", never "bcrypt" (bcrypt needs native compilation).
+
+Database rules (all backends):
+- The database is PostgreSQL in production. Never use MongoDB or Mongoose.
+- If DATABASE_URL is not set, fall back to a local SQLite database.
+- The app must create its own tables on startup:
+  - FastAPI: call Base.metadata.create_all(bind=engine) in main.py.
+  - Django: migrations as above.
+  - Node/Express: use Prisma with provider "postgresql" (schema in prisma/schema.prisma),
+    OR Sequelize with sequelize.sync() called before app.listen().
+
+Frontend rules:
+- Build a complete, polished UI, not a skeleton. Every backend endpoint must be
+  reachable from the UI.
+- React: use Vite (never Create React App), react-router-dom for routing,
+  one API service file that reads the backend URL from import.meta.env.VITE_API_URL.
+- Include all auth screens the backend supports: login, register (with a link
+  between them), and logout.
+- After login, show a main dashboard with navigation (navbar or sidebar) to every
+  feature page. Each feature has pages to list, create, edit and delete its items.
+- Styling: add Tailwind via <script src="https://cdn.tailwindcss.com"></script>
+  in index.html and style every component with Tailwind classes. Use a consistent
+  color scheme, cards, spacing, hover states, and a responsive layout.
+- Show loading states, error messages and empty states (e.g. "No notes yet").
 """
 
 
@@ -112,7 +152,7 @@ async def generate_code(
         api_key=os.getenv("GROQ_API_KEY"),
         model="openai/gpt-oss-120b",
         temperature=0.5,
-        max_tokens=7000,
+        max_tokens=32000,
         reasoning_effort="low",
     )
 
@@ -208,6 +248,11 @@ async def generate_code(
     )
 
     parsed["files"] = fill_missing_files(
+        parsed["files"],
+        llm,
+    )
+
+    parsed["files"] = fill_missing_frontend_exports(
         parsed["files"],
         llm,
     )

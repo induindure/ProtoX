@@ -178,6 +178,8 @@ def get_frontend_commands(
         "VITE_API_URL": backend_api_url,
         "NEXT_PUBLIC_API_URL": backend_api_url,
         "REACT_APP_API_URL": backend_api_url,
+        "PORT": str(port),
+        "BROWSER": "none",
     }
 
     if frontend_dir is not None:

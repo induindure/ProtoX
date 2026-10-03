@@ -37,7 +37,7 @@ async def start_preview(project_id: str):
     # files. Rebuilding would wipe out fixes and the venv mid-install.
     status = process_manager.get_status(project_id)
     if status and any(
-        status[side]["status"] in ("pending", "installing", "running")
+        status[side]["status"] in ("pending", "installing", "starting", "running")
         for side in ("frontend", "backend")
     ):
         return status

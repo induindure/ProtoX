@@ -67,8 +67,62 @@ EXTRA_PYTHON_PACKAGES = [
     "greenlet",           # needed by async SQLAlchemy
     "asyncpg",            # async Postgres driver
     "aiosqlite",          # async SQLite driver (for the fallback)
+    "bcrypt==4.0.1",      # newer bcrypt breaks passlib
+    "dj-database-url",
 ]
 
+# Extra packages for Django backends only.
+EXTRA_DJANGO_PACKAGES = [
+    "django",
+    "djangorestframework",
+    "djangorestframework-simplejwt",
+    "django-cors-headers",
+    "dj-database-url",
+]
+
+CREATE_TABLES_SCRIPT = r'''
+import importlib
+import os
+import sys
+from pathlib import Path
+
+from sqlalchemy import MetaData, create_engine
+
+metadatas, seen = [], set()
+
+for py in Path("backend").rglob("*.py"):
+    if ".preview_venv" in py.parts or "__pycache__" in py.parts:
+        continue
+    mod_name = ".".join(py.with_suffix("").parts)
+    if mod_name.endswith(".__init__"):
+        mod_name = mod_name[: -len(".__init__")]
+    try:
+        mod = importlib.import_module(mod_name)
+    except Exception as e:
+        print(f"[create-tables] skipped {mod_name}: {e}")
+        continue
+    for obj in list(vars(mod).values()):
+        try:
+            md = obj if isinstance(obj, MetaData) else getattr(obj, "metadata", None)
+        except Exception:
+            continue
+        if isinstance(md, MetaData) and md.tables and id(md) not in seen:
+            seen.add(id(md))
+            metadatas.append(md)
+
+url = os.environ.get("DATABASE_URL", "")
+for old, new in (("+asyncpg", ""), ("+aiosqlite", ""), ("+psycopg_async", "+psycopg")):
+    url = url.replace(old, new)
+
+if not metadatas or not url:
+    print("[create-tables] nothing to create")
+    sys.exit(0)
+
+engine = create_engine(url)
+for md in metadatas:
+    md.create_all(engine)
+    print(f"[create-tables] tables ready: {', '.join(sorted(md.tables))}")
+'''
 
 def _ensure_project_venv(backend_dir: Path) -> Path:
     """
@@ -397,6 +451,85 @@ def _ensure_frontend_index(frontend_dir: Path, log: deque):
         )
         log.append("[frontend] index.html was missing — created a default one")
 
+def _run_setup_step(cmd, cwd, env, log, label, timeout=120):
+    """Runs a one-off setup command (like creating tables) and logs the result.
+    Never stops the preview: if it fails, the server still starts."""
+    log.append(f"[backend] {label}...")
+    try:
+        result = subprocess.run(
+            cmd, cwd=cwd, env=env,
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+            timeout=timeout,
+        )
+        for line in (result.stdout + result.stderr).splitlines()[-15:]:
+            log.append(f"    {line}")
+        if result.returncode != 0:
+            log.append(f"[backend] {label} failed (exit {result.returncode}) — starting anyway")
+    except Exception as e:
+        log.append(f"[backend] {label} could not run: {e}")
+
+def _mark_running_when_ready(state: dict, proc: subprocess.Popen, timeout: int = 180):
+    """Switch status from 'starting' to 'running' once the port accepts connections."""
+    port = state["port"]
+    deadline = time.time() + timeout
+    while time.time() < deadline and proc.poll() is None:
+        if state["status"] != "starting":
+            return
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=1):
+                state["status"] = "running"
+                return
+        except OSError:
+            time.sleep(0.5)
+    if state["status"] == "starting" and proc.poll() is None:
+        state["status"] = "running"
+
+_CUSTOM_USER = re.compile(
+    r"^class\s+(\w+)\s*\(\s*(?:[\w.]*\.)?(?:AbstractUser|AbstractBaseUser)\b",
+    re.MULTILINE,
+)
+
+
+def _fix_django_user_model(backend_dir: Path, log: deque):
+    """Adds AUTH_USER_MODEL to settings when the app defines a custom User
+    model but forgot to tell Django about it."""
+    custom = None
+    settings_file = None
+
+    for root, dirs, files in os.walk(backend_dir):
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+        for fname in files:
+            if not fname.endswith(".py"):
+                continue
+            path = Path(root) / fname
+            try:
+                text = path.read_text(encoding="utf-8")
+            except Exception:
+                continue
+
+            if settings_file is None and "INSTALLED_APPS" in text:
+                settings_file = path
+
+            if custom is None and (fname == "models.py" or path.parent.name == "models"):
+                m = _CUSTOM_USER.search(text)
+                if m:
+                    app_dir = path.parent if fname == "models.py" else path.parent.parent
+                    custom = f"{app_dir.name}.{m.group(1)}"
+
+    if not custom or not settings_file:
+        return
+
+    settings_text = settings_file.read_text(encoding="utf-8")
+    if "AUTH_USER_MODEL" in settings_text:
+        return
+
+    settings_file.write_text(
+        settings_text.rstrip() + f'\n\nAUTH_USER_MODEL = "{custom}"\n',
+        encoding="utf-8",
+    )
+    log.append(f'[backend] set AUTH_USER_MODEL = "{custom}" in {settings_file.name}')
+
 def _run_side(name: str, cwd: Path, cmds: dict, state: dict):
     log = state["log"]
 
@@ -420,6 +553,8 @@ def _run_side(name: str, cwd: Path, cmds: dict, state: dict):
     run_cmd = cmds["run"]
     install_cwd = cwd
     run_cwd = cwd
+    create_tables = False
+    django_migrate = False
 
     state["status"] = "installing"
 
@@ -478,10 +613,14 @@ def _run_side(name: str, cwd: Path, cmds: dict, state: dict):
                 init_file.write_text("", encoding="utf-8")
             run_cwd = cwd.parent
             env["PYTHONPATH"] = str(cwd) + os.pathsep + env.get("PYTHONPATH", "")
+            create_tables = True
 
         elif run_cmd and run_cmd[0] == "python":
             # Django. manage.py lives in backend/, so stay there.
             run_cmd = [str(project_python)] + run_cmd[1:]
+            django_migrate = True
+            install_cmd[-2:-2] = EXTRA_DJANGO_PACKAGES
+            _fix_django_user_model(cwd, log)
 
         log.append(f"[{name}] using project venv: {project_python}")
 
@@ -539,7 +678,43 @@ def _run_side(name: str, cwd: Path, cmds: dict, state: dict):
         state["status"] = "install_failed"
         return
 
+    # ---------- Django: create tables ----------
+    if name == "backend" and django_migrate:
+        _run_setup_step([str(project_python), "manage.py", "makemigrations"],
+                        run_cwd, env, log, "preparing migrations (Django)")
+        _run_setup_step([str(project_python), "manage.py", "migrate", "--run-syncdb"],
+                        run_cwd, env, log, "creating database tables (Django)")
+
+    # ---------- Node/Express: create tables ----------
+    if name == "backend" and str(install_cmd[0]).startswith("pnpm"):
+        npx = "npx.cmd" if os.name == "nt" else "npx"
+        if (cwd / "prisma" / "schema.prisma").exists():
+            _run_setup_step([npx, "prisma", "db", "push"],
+                            cwd, env, log, "creating database tables (Prisma)")
+        elif any((cwd / f).exists() for f in ("knexfile.js", "knexfile.ts")):
+            _run_setup_step([npx, "knex", "migrate:latest"],
+                            cwd, env, log, "creating database tables (Knex)")
+
     # ---------- Run dev server ----------
+    # ---------- Create database tables the app forgot to create ----------
+    if name == "backend" and create_tables:
+        script = run_cwd / "_preview_create_tables.py"
+        script.write_text(CREATE_TABLES_SCRIPT, encoding="utf-8")
+        try:
+            result = subprocess.run(
+                [str(project_python), str(script)],
+                cwd=run_cwd,
+                env=env,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=60,
+            )
+            for line in (result.stdout + result.stderr).splitlines()[-15:]:
+                log.append(f"    {line}")
+        except Exception as e:
+            log.append(f"[backend] could not create tables: {e}")
     log.append(f"[{name}] starting: {' '.join(str(c) for c in run_cmd)}")
     try:
         proc = subprocess.Popen(
@@ -555,7 +730,10 @@ def _run_side(name: str, cwd: Path, cmds: dict, state: dict):
         return
 
     state["proc"] = proc
-    state["status"] = "running"
+    state["status"] = "starting"
+    threading.Thread(
+        target=_mark_running_when_ready, args=(state, proc), daemon=True
+    ).start()
     _stream_output(proc, log, state, on_exit_status="stopped")
 
 def _uses_async_db(backend_dir: Path) -> bool:
@@ -596,7 +774,7 @@ def start_preview(
         # If this project is already starting or running, don't start it
         # a second time. Two copies in the same folder fight over files.
         if existing and any(
-            existing[side]["status"] in ("pending", "installing", "running")
+            existing[side]["status"] in ("pending", "installing", "starting", "running")
             for side in ("frontend", "backend")
         ):
             return existing

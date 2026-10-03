@@ -98,7 +98,7 @@ export default function App() {
         }),
       })
       const data = await response.json()
-      window.open(`http://localhost:5173/?id=${data.project_id}`, '_blank')
+      window.open(`http://localhost:5175/?id=${data.project_id}`, '_blank')
     } catch {
       setError('Could not send project to ProtoTest.')
     }
