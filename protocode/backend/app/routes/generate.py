@@ -28,6 +28,8 @@ def fix_code_endpoint(request: FixRequest):
             request.tech_stack,
         )
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 class CodeRequest(BaseModel):
@@ -41,4 +43,6 @@ async def generate_code_endpoint(request: CodeRequest):
         result = await generate_code(request.idea, request.tech_stack, request.database_url)
         return result
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

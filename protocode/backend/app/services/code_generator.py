@@ -15,6 +15,8 @@ from app.services.package_json_fixer import fix_package_json_dependencies
 from app.services.provider_fixer import fix_missing_providers
 from app.services.django_auth_fixer import fix_django_auth_views
 from app.services.migration_fixer import drop_generated_migrations
+from app.services.api_client_fixer import fix_api_client_token
+from app.services.provider_fixer import fix_missing_providers, fix_router_placement
 
 load_dotenv()
 
@@ -117,6 +119,11 @@ Frontend rules:
 - Use current library APIs: @tanstack/react-query v5 object syntax
   (useQuery({ queryKey, queryFn })), react-router-dom v6,
   jwt-decode v4 (import { jwtDecode } from "jwt-decode").
+- The frontend's API client attaches the token with an axios REQUEST interceptor that
+  reads localStorage.getItem("token") on every request. Never set the Authorization
+  header inside a React useEffect.
+- main.jsx renders, from outside in: <BrowserRouter> → <QueryClientProvider> (if used)
+  → <AuthProvider> → <App />. App.jsx contains only <Routes>, never a Router.
 
 User flow (every app):
 - "/" is a landing page: app name, a one-line pitch, 3 feature highlights, and
@@ -326,6 +333,14 @@ async def generate_code(
     )
 
     parsed["files"] = fix_missing_providers(
+        parsed["files"]
+    )
+
+    parsed["files"] = fix_router_placement(
+        parsed["files"]
+    )
+
+    parsed["files"] = fix_api_client_token(
         parsed["files"]
     )
 
