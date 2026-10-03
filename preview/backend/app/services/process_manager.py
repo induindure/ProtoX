@@ -33,6 +33,7 @@ import re
 import secrets
 import shutil
 import json
+import urllib.request
 
 from app.services.stack_launcher import (
     split_stack,
@@ -169,12 +170,18 @@ def _stream_output(
     log: deque,
     state: dict,
     on_exit_status: str,
+    on_line=None,
 ):
     for line in iter(proc.stdout.readline, b""):
         if not line:
             break
-
-        log.append(line.decode(errors="ignore").rstrip())
+        text = line.decode(errors="ignore").rstrip()
+        log.append(text)
+        if on_line:
+            try:
+                on_line(text)
+            except Exception:
+                pass
 
     proc.wait()
 
@@ -553,6 +560,130 @@ def _ensure_tailwind(frontend_dir: Path, log: deque):
         index.write_text(html, encoding="utf-8")
         log.append(f"[frontend] added Tailwind to {index.relative_to(frontend_dir)}")
 
+PROTOCODE_FIX_URL = "http://localhost:8001/api/fix-code"
+MAX_FIX_ATTEMPTS = 3
+
+_FIX_ALWAYS_SEND = {
+    "settings.py", "urls.py", "main.py", "models.py", "database.py", "config.py",
+    "requirements.txt", "package.json", "app.js", "server.js", "index.js",
+    "schema.prisma",
+}
+_FIX_SOURCE_EXTS = (".py", ".js", ".ts", ".jsx", ".tsx", ".vue", ".json",
+                    ".txt", ".prisma", ".html")
+_FIX_SKIP_FILES = {"package-lock.json", "pnpm-lock.yaml", "yarn.lock"}
+
+
+def _collect_fix_context(project_root: Path, log_text: str):
+    """Returns (all_paths, files_to_send): files named in the error first,
+    then key backend config files, within a size budget."""
+    all_paths = []
+    for root, dirs, files in os.walk(project_root):
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith(".")]
+        for fname in files:
+            if (not fname.endswith(_FIX_SOURCE_EXTS)
+                    or fname in _FIX_SKIP_FILES or fname.startswith("_preview")):
+                continue
+            all_paths.append((Path(root) / fname).relative_to(project_root).as_posix())
+
+    mentioned = [p for p in all_paths
+                 if p in log_text or p.replace("/", "\\") in log_text]
+    key_files = [p for p in all_paths
+                 if Path(p).name in _FIX_ALWAYS_SEND and p not in mentioned
+                 and (p.startswith("backend/") or p == "frontend/package.json")]
+
+    files, budget = [], 150_000
+    for rel in mentioned + key_files:
+        try:
+            content = (project_root / rel).read_text(encoding="utf-8")
+        except Exception:
+            continue
+        if len(content) > budget:
+            continue
+        budget -= len(content)
+        files.append({"path": rel, "content": content})
+
+    return all_paths, files
+
+
+def _request_fix(log_text: str, project_root: Path, log: deque) -> list[str]:
+    """Asks ProtoCode for a fix and writes the changed files. Returns changed paths."""
+    all_paths, files = _collect_fix_context(project_root, log_text)
+    body = json.dumps({
+        "error_log": log_text,
+        "files": files,
+        "all_paths": all_paths,
+    }).encode("utf-8")
+
+    request = urllib.request.Request(
+        PROTOCODE_FIX_URL, data=body,
+        headers={"Content-Type": "application/json"}, method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=240) as response:
+            result = json.loads(response.read().decode("utf-8"))
+    except Exception as e:
+        log.append(f"[auto-fix] could not reach ProtoCode: {e}")
+        return []
+
+    if result.get("explanation"):
+        log.append(f"[auto-fix] {result['explanation']}")
+
+    changed = []
+    root = project_root.resolve()
+    for f in result.get("files", []):
+        target = (project_root / f["path"]).resolve()
+        if not target.is_relative_to(root):
+            continue  # never write outside the project folder
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(f["content"], encoding="utf-8")
+        changed.append(f["path"])
+        log.append(f"[auto-fix] updated {f['path']}")
+    return changed
+
+_FRONTEND_ERROR_MARKERS = (
+    "Pre-transform error",       # Vite
+    "Internal server error",     # Vite
+    "Failed to resolve import",  # Vite
+    "Transform failed",          # Vite / esbuild
+    "Failed to compile",         # Create React App / Next.js
+    "Module not found",          # webpack / Next.js
+)
+
+
+def _make_frontend_fixer(state, log, project_root, install_cmd, install_cwd, install_env):
+    """Returns an on_line callback that triggers an AI fix when the frontend
+    dev server reports a compile error. The dev server reloads by itself."""
+    lock = threading.Lock()
+    info = {"attempts": 0, "busy": False}
+
+    def worker():
+        time.sleep(1.5)  # let the full error message arrive in the log
+        log.append(
+            f"[auto-fix] frontend error — asking AI to fix it "
+            f"(attempt {info['attempts']}/{MAX_FIX_ATTEMPTS})..."
+        )
+        changed = _request_fix("\n".join(list(log)[-60:]), project_root, log)
+        if any(Path(c).name == "package.json" for c in changed):
+            _run_setup_step(install_cmd, install_cwd, install_env, log,
+                            "reinstalling dependencies", timeout=INSTALL_TIMEOUT_SECONDS)
+        if changed:
+            log.append("[auto-fix] frontend updated — the page reloads automatically")
+        time.sleep(3)  # ignore leftover error lines printed before the fix
+        info["busy"] = False
+
+    def on_line(text: str):
+        if not any(marker in text for marker in _FRONTEND_ERROR_MARKERS):
+            return
+        with lock:
+            if (info["busy"] or info["attempts"] >= MAX_FIX_ATTEMPTS
+                    or state["status"] == "stopped"):
+                return
+            info["busy"] = True
+            info["attempts"] += 1
+        threading.Thread(target=worker, daemon=True).start()
+
+    return on_line
+
 def _run_side(name: str, cwd: Path, cmds: dict, state: dict):
     log = state["log"]
 
@@ -641,7 +772,7 @@ def _run_side(name: str, cwd: Path, cmds: dict, state: dict):
 
         elif run_cmd and run_cmd[0] == "python":
             # Django. manage.py lives in backend/, so stay there.
-            run_cmd = [str(project_python)] + run_cmd[1:]
+            run_cmd = [str(project_python)] + run_cmd[1:] + ["--noreload"]
             django_migrate = True
             install_cmd[-2:-2] = EXTRA_DJANGO_PACKAGES
             _fix_django_user_model(cwd, log)
@@ -720,45 +851,85 @@ def _run_side(name: str, cwd: Path, cmds: dict, state: dict):
                             cwd, env, log, "creating database tables (Knex)")
 
     # ---------- Run dev server ----------
-    # ---------- Create database tables the app forgot to create ----------
-    if name == "backend" and create_tables:
-        script = run_cwd / "_preview_create_tables.py"
-        script.write_text(CREATE_TABLES_SCRIPT, encoding="utf-8")
+    # ---------- Database setup (re-run after every fix) ----------
+    def run_db_setup():
+        if name != "backend":
+            return
+        if create_tables:
+            script = run_cwd / "_preview_create_tables.py"
+            script.write_text(CREATE_TABLES_SCRIPT, encoding="utf-8")
+            _run_setup_step([str(project_python), str(script)],
+                            run_cwd, env, log, "creating database tables")
+        if django_migrate:
+            _run_setup_step([str(project_python), "manage.py", "makemigrations"],
+                            run_cwd, env, log, "preparing migrations (Django)")
+            _run_setup_step([str(project_python), "manage.py", "migrate", "--run-syncdb"],
+                            run_cwd, env, log, "creating database tables (Django)")
+        if str(install_cmd[0]).startswith("pnpm"):
+            npx = "npx.cmd" if os.name == "nt" else "npx"
+            if (cwd / "prisma" / "schema.prisma").exists():
+                _run_setup_step([npx, "prisma", "db", "push"],
+                                cwd, env, log, "creating database tables (Prisma)")
+            elif any((cwd / f).exists() for f in ("knexfile.js", "knexfile.ts")):
+                _run_setup_step([npx, "knex", "migrate:latest"],
+                                cwd, env, log, "creating database tables (Knex)")
+
+    # ---------- Run dev server, auto-fixing backend crashes ----------
+    project_root = cwd.parent
+    frontend_fixer = (
+        _make_frontend_fixer(state, log, project_root, install_cmd, install_cwd, install_env)
+        if name == "frontend" else None
+    )
+
+    for attempt in range(MAX_FIX_ATTEMPTS + 1):
+        run_db_setup()
+
+        log.append(f"[{name}] starting: {' '.join(str(c) for c in run_cmd)}")
         try:
-            result = subprocess.run(
-                [str(project_python), str(script)],
+            proc = subprocess.Popen(
+                run_cmd,
                 cwd=run_cwd,
                 env=env,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=60,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
             )
-            for line in (result.stdout + result.stderr).splitlines()[-15:]:
-                log.append(f"    {line}")
         except Exception as e:
-            log.append(f"[backend] could not create tables: {e}")
-    log.append(f"[{name}] starting: {' '.join(str(c) for c in run_cmd)}")
-    try:
-        proc = subprocess.Popen(
-            run_cmd,
-            cwd=run_cwd,
-            env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-        )
-    except Exception as e:
-        log.append(f"[{name}] server could not start: {e}")
-        state["status"] = "crashed"
-        return
+            log.append(f"[{name}] server could not start: {e}")
+            state["status"] = "crashed"
+            return
 
-    state["proc"] = proc
-    state["status"] = "starting"
-    threading.Thread(
-        target=_mark_running_when_ready, args=(state, proc), daemon=True
-    ).start()
-    _stream_output(proc, log, state, on_exit_status="stopped")
+        state["proc"] = proc
+        state["status"] = "starting"
+        threading.Thread(
+            target=_mark_running_when_ready, args=(state, proc), daemon=True
+        ).start()
+
+        _stream_output(proc, log, state, on_exit_status="stopped", on_line=frontend_fixer)
+
+        # Only backend crashes are auto-fixed.
+        if state["status"] != "crashed" or name != "backend":
+            return
+        if attempt == MAX_FIX_ATTEMPTS:
+            log.append(f"[auto-fix] gave up after {MAX_FIX_ATTEMPTS} attempts")
+            return
+
+        state["status"] = "starting"
+        log.append(
+            f"[auto-fix] backend crashed — asking AI to fix it "
+            f"(attempt {attempt + 1}/{MAX_FIX_ATTEMPTS})..."
+        )
+        changed = _request_fix("\n".join(list(log)[-80:]), project_root, log)
+
+        if state["status"] == "stopped":
+            return  # user pressed Stop while the fix was running
+        if not changed:
+            log.append("[auto-fix] no fix was applied")
+            state["status"] = "crashed"
+            return
+
+        if any(Path(c).name in ("requirements.txt", "package.json") for c in changed):
+            _run_setup_step(install_cmd, install_cwd, install_env, log,
+                            "reinstalling dependencies", timeout=INSTALL_TIMEOUT_SECONDS)
 
 def _uses_async_db(backend_dir: Path) -> bool:
     """True if the generated backend uses async SQLAlchemy."""
@@ -840,7 +1011,12 @@ def start_preview(
 
     # Use the user's database if given; otherwise fall back to a local
     # SQLite file so the backend can start without a real database.
-    db_url = database_url or "sqlite:///./preview.db"
+    # Previews use a throwaway SQLite database, so they never touch real data.
+    # Node/Express apps (Prisma/Sequelize with Postgres) still need a real URL.
+    if backend_name == "Node/Express" and database_url:
+        db_url = database_url
+    else:
+        db_url = "sqlite:///./preview.db"
 
     if _uses_async_db(backend_dir):
         db_url = _to_async_url(db_url)

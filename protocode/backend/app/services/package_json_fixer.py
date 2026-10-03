@@ -1,6 +1,7 @@
 """
 Makes sure every npm package imported in the generated code is listed in
-the matching package.json (frontend/ and Node/Express backends).
+the matching package.json (frontend/ and Node/Express backends), and pins
+older major versions when the code uses an older library syntax.
 """
 
 import json
@@ -22,8 +23,28 @@ NODE_BUILTINS = {
     "net", "tls", "dns", "readline", "timers", "worker_threads", "cluster",
 }
 
-# Packages where the version matters for how they're imported.
-_JWT_DEFAULT_IMPORT = re.compile(r"""import\s+[\w$]+\s+from\s+['"]jwt-decode['"]""")
+# Libraries whose newer major versions broke syntax that AI models often write.
+# (package, pattern that detects the OLD syntax, version that supports it)
+_VERSION_PINS = [
+    (
+        "jwt-decode",
+        re.compile(r"""import\s+[\w$]+\s+from\s+['"]jwt-decode['"]"""),
+        "^3.1.2",
+    ),
+    (
+        "@tanstack/react-query",
+        # useQuery(['key'], fn) / useQuery('key', fn) / useMutation(fn)
+        re.compile(
+            r"""\buse(?:Query|InfiniteQuery|Mutation)\(\s*(?:\[|['"]|(?:async\s*)?\(|[\w$.]+\s*[,)])"""
+        ),
+        "^4.36.1",
+    ),
+]
+
+# Companion packages that must match the pinned major version.
+_COMPANIONS = {
+    "@tanstack/react-query": ["@tanstack/react-query-devtools"],
+}
 
 
 def _package_name(spec: str):
@@ -39,23 +60,25 @@ def _package_name(spec: str):
 def fix_package_json_dependencies(files: list[dict]) -> list[dict]:
     by_path = {_norm(f["path"]): f for f in files}
 
-    # root folder ("frontend", "backend") -> {package names used}
-    used: dict[str, set] = {}
-    jwt_default_roots = set()
+    used: dict[str, set] = {}     # root folder -> package names imported
+    pins: dict[str, dict] = {}    # root folder -> {package: version}
 
     for path, f in by_path.items():
         if not path.endswith(CODE_EXTS) or "/" not in path:
             continue
         root = path.split("/")[0]
         text = f["content"]
+
         for m in _IMPORT_SPEC.finditer(text):
             name = _package_name(m.group(1))
             if name:
                 used.setdefault(root, set()).add(name)
-        if _JWT_DEFAULT_IMPORT.search(text):
-            jwt_default_roots.add(root)
 
-    for root, names in used.items():
+        for pkg_name, pattern, version in _VERSION_PINS:
+            if pattern.search(text):
+                pins.setdefault(root, {})[pkg_name] = version
+
+    for root in set(used) | set(pins):
         pkg_path = f"{root}/package.json"
         pkg_file = by_path.get(pkg_path)
         if pkg_file is None:
@@ -67,22 +90,37 @@ def fix_package_json_dependencies(files: list[dict]) -> list[dict]:
             continue
 
         deps = pkg.setdefault("dependencies", {})
-        listed = set(deps) | set(pkg.get("devDependencies", {})) | set(pkg.get("peerDependencies", {}))
+        listed = (
+            set(deps)
+            | set(pkg.get("devDependencies", {}))
+            | set(pkg.get("peerDependencies", {}))
+        )
 
         added = []
-        for name in sorted(names - listed):
+        for name in sorted(used.get(root, set()) - listed):
             deps[name] = "latest"
             added.append(name)
 
-        # jwt-decode v4 has no default export; default-import code needs v3.
-        if root in jwt_default_roots:
-            for section in ("dependencies", "devDependencies"):
-                if "jwt-decode" in pkg.get(section, {}):
-                    pkg[section]["jwt-decode"] = "^3.1.2"
+        pinned = []
+        for name, version in pins.get(root, {}).items():
+            for target in [name] + _COMPANIONS.get(name, []):
+                section = next(
+                    (s for s in ("dependencies", "devDependencies") if target in pkg.get(s, {})),
+                    None,
+                )
+                if section is None:
+                    if target != name:
+                        continue  # companion not used, nothing to pin
+                    section = "dependencies"
+                if pkg[section].get(target) != version:
+                    pkg[section][target] = version
+                    pinned.append(f"{target}@{version}")
 
-        if added or root in jwt_default_roots:
+        if added or pinned:
             pkg_file["content"] = json.dumps(pkg, indent=2) + "\n"
             if added:
                 print(f"[package-fixer] {pkg_path}: added {', '.join(added)}")
+            if pinned:
+                print(f"[package-fixer] {pkg_path}: pinned {', '.join(pinned)} (code uses older syntax)")
 
     return files

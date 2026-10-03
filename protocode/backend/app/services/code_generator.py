@@ -12,6 +12,8 @@ from app.services.import_fixer import fix_relative_imports
 from app.services.completeness_checker import fill_missing_files
 from app.services.frontend_checker import fill_missing_frontend_exports
 from app.services.package_json_fixer import fix_package_json_dependencies
+from app.services.provider_fixer import fix_missing_providers
+from app.services.django_auth_fixer import fix_django_auth_views
 
 load_dotenv()
 
@@ -46,9 +48,8 @@ Configuration and secrets:
 - If a Database URL is given in the user message, put it ONLY in a backend/.env file
   (DATABASE_URL=...). .env.example must contain placeholder values only.
 - Every setting must have a safe default so the app starts without a .env file
-  (e.g. secret_key: str = "dev-secret-change-me").
-- Use Pydantic v2 syntax. Import BaseSettings from "pydantic_settings"
-  (`from pydantic_settings import BaseSettings`), never from "pydantic".
+  (e.g. SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-change-me") in Django,
+  a default value on the Settings field in FastAPI, process.env.X || "default" in Express).
 
 Backend requirements:
 - Main entry point, routes for every feature (at least 3), at least 2 data models,
@@ -64,12 +65,22 @@ Backend structure rules (FastAPI):
   `from .database import get_db`.
 - models.py: SQLAlchemy models only. schemas.py: Pydantic models only.
   crud.py: database functions only.
+- Use Pydantic v2 syntax. Import BaseSettings from "pydantic_settings"
+  (`from pydantic_settings import BaseSettings`), never from "pydantic".
 
 Backend rules (Django):
+- settings.py is a plain Django settings module: UPPERCASE variables at module level
+  (INSTALLED_APPS, DATABASES, SIMPLE_JWT, ...). Never define a Settings class and
+  never import pydantic or pydantic_settings anywhere in a Django project.
 - If you define a custom User model, set AUTH_USER_MODEL = "<app>.User" in settings.py.
 - Read DATABASES from DATABASE_URL using dj-database-url, falling back to SQLite.
 - Every app with models has a migrations/__init__.py.
 - Use django-cors-headers so the frontend can call the API.
+- With Django REST Framework, register, login and token views must set
+  permission_classes = [AllowAny] and authentication_classes = [].
+- Use Django REST Framework serializers (serializers.Serializer / ModelSerializer)
+  for all request validation. Never use Pydantic in a Django project.
+- Settings come from django.conf.settings; never use pydantic_settings in Django.
 
 Backend rules (Node/Express):
 - For password hashing always use "bcryptjs", never "bcrypt" (bcrypt needs native compilation).
@@ -82,6 +93,7 @@ Database rules (all backends):
   - Django: migrations as above.
   - Node/Express: use Prisma with provider "postgresql" (schema in prisma/schema.prisma),
     OR Sequelize with sequelize.sync() called before app.listen().
+  - Use only portable column types (Integer, String, Text, Boolean, DateTime, Float, ForeignKey). No Postgres-only types like ARRAY or JSONB.
 
 Frontend rules:
 - Build a complete, polished UI, not a skeleton. Every backend endpoint must be
@@ -96,6 +108,10 @@ Frontend rules:
   in index.html and style every component with Tailwind classes. Use a consistent
   color scheme, cards, spacing, hover states, and a responsive layout.
 - Show loading states, error messages and empty states (e.g. "No notes yet").
+- If you create a React context provider (AuthProvider, ThemeProvider, ...), wrap <App /> with it in main.jsx.
+- Use current library APIs: @tanstack/react-query v5 object syntax
+  (useQuery({ queryKey, queryFn })), react-router-dom v6,
+  jwt-decode v4 (import { jwtDecode } from "jwt-decode").
 
 User flow (every app):
 - "/" is a landing page: app name, a one-line pitch, 3 feature highlights, and
@@ -120,8 +136,26 @@ Visual design (every app):
 - Use icons from lucide-react (React) or lucide-vue-next (Vue) for navigation
   and actions, and add them to package.json.
 - The app must look like a modern, finished SaaS product, not a tutorial.
-"""
 
+Authentication contract (every stack, exactly this):
+- POST {API}/auth/register/ with {"username", "email", "password"}
+  -> 201 {"access": "<jwt>", "user": {"id", "username", "email"}}
+  Registering also logs the user in.
+- POST {API}/auth/login/ with {"username", "password"}
+  -> 200 {"access": "<jwt>", "user": {"id", "username", "email"}}
+- GET {API}/auth/me/ with header "Authorization: Bearer <access>"
+  -> 200 {"id", "username", "email"}
+- The frontend stores the "access" value in localStorage under the key "token",
+  and its API client adds "Authorization: Bearer <token>" to every request.
+- The backend accepts exactly that header format on every protected route
+  (Django: rest_framework_simplejwt JWTAuthentication; FastAPI: OAuth2 bearer;
+  Express: a middleware reading the Bearer token).
+- When any request returns 401, the frontend clears the token and redirects to /login.
+
+Frontend robustness:
+- Every page that loads data handles loading, error and empty states.
+  Treat a missing list as [] (e.g. (data ?? []).length), never assume data exists.
+"""
 
 def fix_react_package_json(files: list[dict]) -> list[dict]:
     """
@@ -280,6 +314,14 @@ async def generate_code(
     parsed["files"] = fill_missing_frontend_exports(
         parsed["files"],
         llm,
+    )
+
+    parsed["files"] = fix_missing_providers(
+        parsed["files"]
+    )
+
+    parsed["files"] = fix_django_auth_views(
+        parsed["files"]
     )
 
     parsed["files"] = fix_package_json_dependencies(

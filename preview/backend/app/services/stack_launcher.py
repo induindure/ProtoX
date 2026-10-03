@@ -8,7 +8,8 @@ from pathlib import Path
 import json
 import sys
 import os
-
+import re
+from urllib.parse import urlparse
 
 FRONTENDS = ["React", "Vue", "Next.js"]
 BACKENDS = ["FastAPI", "Django", "Node/Express"]
@@ -158,6 +159,41 @@ def _detect_frontend_run_command(
     ]
 
 
+_API_ENV_NAMES = (
+    "VITE_API_URL", "VITE_API_BASE_URL", "VITE_BACKEND_URL",
+    "REACT_APP_API_URL", "REACT_APP_API_BASE_URL",
+    "NEXT_PUBLIC_API_URL", "NEXT_PUBLIC_API_BASE_URL",
+)
+
+
+def _api_path_suffix(frontend_dir: Path) -> str:
+    """
+    Finds the path part the frontend expects on the API address, e.g. '/api'
+    from VITE_API_URL=http://localhost:8000/api, so Preview can keep it.
+    """
+    # 1. The frontend's own .env files
+    for name in (".env", ".env.local", ".env.development", ".env.example"):
+        env_file = frontend_dir / name
+        if not env_file.exists():
+            continue
+        for line in env_file.read_text(encoding="utf-8", errors="ignore").splitlines():
+            m = re.match(r"\s*(\w+)\s*=\s*['\"]?([^'\"\s]+)", line)
+            if m and m.group(1) in _API_ENV_NAMES:
+                return urlparse(m.group(2)).path.rstrip("/")
+
+    # 2. A fallback address written in the code, e.g. || "http://localhost:8000/api"
+    src = frontend_dir / "src"
+    if src.exists():
+        for f in src.rglob("*"):
+            if f.suffix not in (".js", ".jsx", ".ts", ".tsx", ".vue"):
+                continue
+            text = f.read_text(encoding="utf-8", errors="ignore")
+            m = re.search(r"https?://(?:localhost|127\.0\.0\.1):\d+(/[^'\"`\s]*)", text)
+            if m:
+                return m.group(1).rstrip("/")
+
+    return ""
+
 def get_frontend_commands(
     frontend: str,
     port: int,
@@ -174,13 +210,13 @@ def get_frontend_commands(
         }
     """
 
-    env = {
-        "VITE_API_URL": backend_api_url,
-        "NEXT_PUBLIC_API_URL": backend_api_url,
-        "REACT_APP_API_URL": backend_api_url,
-        "PORT": str(port),
-        "BROWSER": "none",
-    }
+    api_url = backend_api_url
+    if frontend_dir is not None:
+        api_url = backend_api_url + _api_path_suffix(frontend_dir)
+
+    env = {name: api_url for name in _API_ENV_NAMES}
+    env["PORT"] = str(port)
+    env["BROWSER"] = "none"
 
     if frontend_dir is not None:
         run_command = _detect_frontend_run_command(
