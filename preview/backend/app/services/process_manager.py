@@ -530,6 +530,29 @@ def _fix_django_user_model(backend_dir: Path, log: deque):
     )
     log.append(f'[backend] set AUTH_USER_MODEL = "{custom}" in {settings_file.name}')
 
+TAILWIND_TAG = '<script src="https://cdn.tailwindcss.com"></script>'
+
+
+def _ensure_tailwind(frontend_dir: Path, log: deque):
+    """Adds the Tailwind CDN script to index.html if the project doesn't
+    already set up Tailwind, so generated Tailwind classes actually work."""
+    pkg_file = frontend_dir / "package.json"
+    if pkg_file.exists() and "tailwindcss" in pkg_file.read_text(encoding="utf-8"):
+        return  # project installs Tailwind properly itself
+
+    for index in (frontend_dir / "index.html", frontend_dir / "public" / "index.html"):
+        if not index.exists():
+            continue
+        html = index.read_text(encoding="utf-8")
+        if "cdn.tailwindcss.com" in html:
+            continue
+        if "</head>" in html:
+            html = html.replace("</head>", f"  {TAILWIND_TAG}\n  </head>", 1)
+        else:
+            html = TAILWIND_TAG + "\n" + html
+        index.write_text(html, encoding="utf-8")
+        log.append(f"[frontend] added Tailwind to {index.relative_to(frontend_dir)}")
+
 def _run_side(name: str, cwd: Path, cmds: dict, state: dict):
     log = state["log"]
 
@@ -560,6 +583,7 @@ def _run_side(name: str, cwd: Path, cmds: dict, state: dict):
 
     if name == "frontend":
         _ensure_frontend_index(cwd, log)
+        _ensure_tailwind(cwd, log)
 
     # ---------- Python backend preparation ----------
     if name == "backend" and any("pip" in str(p).lower() for p in install_cmd):

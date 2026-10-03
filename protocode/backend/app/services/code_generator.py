@@ -11,6 +11,7 @@ from app.services.env_builder import apply_database_url
 from app.services.import_fixer import fix_relative_imports
 from app.services.completeness_checker import fill_missing_files
 from app.services.frontend_checker import fill_missing_frontend_exports
+from app.services.package_json_fixer import fix_package_json_dependencies
 
 load_dotenv()
 
@@ -95,6 +96,30 @@ Frontend rules:
   in index.html and style every component with Tailwind classes. Use a consistent
   color scheme, cards, spacing, hover states, and a responsive layout.
 - Show loading states, error messages and empty states (e.g. "No notes yet").
+
+User flow (every app):
+- "/" is a landing page: app name, a one-line pitch, 3 feature highlights, and
+  two buttons: "Get started" (goes to /register) and "Log in" (goes to /login).
+- /register and /login are centered cards on a colored gradient background,
+  each linking to the other. After registering, log the user in automatically
+  and go straight to the dashboard.
+- /dashboard shows a welcome message, summary stat cards (counts, recent activity)
+  and quick actions. Protected pages redirect to /login when not logged in.
+- On first run, the backend seeds 3-5 realistic sample items so the dashboard
+  never looks empty.
+
+Visual design (every app):
+- Pick a primary color that fits the app (e.g. indigo for productivity, emerald for
+  health, rose for social) and use it consistently for buttons, links and accents.
+- Layout after login: a sidebar or top navbar with the app name, icons, and links
+  to every feature, plus a logout button.
+- Use cards with rounded-xl corners, soft shadows and generous padding.
+  Use a light gray page background (bg-slate-50), never plain white everywhere.
+- Buttons: solid primary color, rounded-lg, hover and disabled states.
+  Inputs: full width, rounded-lg, visible border, focus ring in the primary color.
+- Use icons from lucide-react (React) or lucide-vue-next (Vue) for navigation
+  and actions, and add them to package.json.
+- The app must look like a modern, finished SaaS product, not a tutorial.
 """
 
 
@@ -255,6 +280,10 @@ async def generate_code(
     parsed["files"] = fill_missing_frontend_exports(
         parsed["files"],
         llm,
+    )
+
+    parsed["files"] = fix_package_json_dependencies(
+        parsed["files"]
     )
 
     # Fix React package.json dependencies.
