@@ -5,7 +5,7 @@ default and forget to exempt these views, causing 401 on registration.
 """
 
 import re
-
+from pathlib import PurePosixPath
 from app.services.completeness_checker import _norm
 
 _AUTH_NAME = re.compile(r"(register|signup|sign_up|login|token)", re.IGNORECASE)
@@ -88,4 +88,111 @@ def fix_django_auth_views(files: list[dict]) -> list[dict]:
             f["content"] = new_text
             print(f"[django-auth-fixer] opened register/login views in {path}")
 
+    return files
+
+_CUSTOM_USER = re.compile(
+    r"^class\s+(\w+)\s*\(\s*(?:[\w.]*\.)?(?:AbstractUser|AbstractBaseUser)\b",
+    re.MULTILINE,
+)
+
+
+def fix_django_user_model(files: list[dict]) -> list[dict]:
+    """
+    If the project defines a custom User model but settings.py doesn't set
+    AUTH_USER_MODEL, Django uses two different user tables: register saves to
+    one, login and token checks read the other, so every login returns 401.
+    """
+    by_path = {_norm(f["path"]): f for f in files}
+    if not any(p.endswith("manage.py") for p in by_path):
+        return files  # not a Django project
+
+    custom = None
+    settings_file = None
+
+    for path, f in by_path.items():
+        if not path.startswith("backend/") or not path.endswith(".py"):
+            continue
+        text = f["content"]
+
+        if settings_file is None and "INSTALLED_APPS" in text and "MIDDLEWARE" in text:
+            settings_file = f
+
+        if custom is None and (path.endswith("/models.py") or "/models/" in path):
+            m = _CUSTOM_USER.search(text)
+            if m:
+                parts = PurePosixPath(path).parts
+                app_label = parts[-2] if path.endswith("/models.py") else parts[-3]
+                custom = f"{app_label}.{m.group(1)}"
+
+    if not custom or settings_file is None:
+        return files
+    if "AUTH_USER_MODEL" in settings_file["content"]:
+        return files
+
+    settings_file["content"] = (
+        settings_file["content"].rstrip() + f'\n\nAUTH_USER_MODEL = "{custom}"\n'
+    )
+    print(f'[django-user-fixer] set AUTH_USER_MODEL = "{custom}"')
+    return files
+
+_CONFIRM_FIELDS = ("password2", "confirm_password", "password_confirm")
+
+
+def _fix_register_serializer_text(text: str):
+    lines = text.split("\n")
+
+    for idx, line in enumerate(lines):
+        m = re.match(r"^class\s+(\w+)\s*\(([^)]*)\)\s*:", line)
+        if not m or "Serializer" not in m.group(2):
+            continue
+        if not re.search(r"regist|signup|sign_up", m.group(1), re.IGNORECASE):
+            continue
+
+        # The class body: indented lines after the class line.
+        end = idx + 1
+        while end < len(lines) and (lines[end].strip() == "" or lines[end].startswith((" ", "\t"))):
+            end += 1
+        body = "\n".join(lines[idx + 1:end])
+
+        if "create_user" in body or "set_password" in body:
+            return text, False  # already hashes passwords
+
+        if "def create" in body:
+            # Has its own create(); make it hash the password.
+            new_body = re.sub(r"\.objects\.create\(", ".objects.create_user(", body)
+            if new_body == body:
+                return text, False
+            lines[idx + 1:end] = new_body.split("\n")
+        else:
+            # Plain ModelSerializer: add a create() that hashes the password.
+            if "class Meta" not in body or "model" not in body:
+                return text, False
+            insert_at = end
+            while insert_at > idx + 1 and lines[insert_at - 1].strip() == "":
+                insert_at -= 1
+            pops = [f'        validated_data.pop("{f}", None)' for f in _CONFIRM_FIELDS]
+            lines[insert_at:insert_at] = (
+                ["", "    def create(self, validated_data):"]
+                + pops
+                + ["        return self.Meta.model.objects.create_user(**validated_data)"]
+            )
+        return "\n".join(lines), True
+
+    return text, False
+
+
+def fix_register_password_hashing(files: list[dict]) -> list[dict]:
+    """
+    Registration serializers often save the password as plain text, so the
+    user can register but never log in. Makes them use create_user(), which
+    hashes the password.
+    """
+    for f in files:
+        path = _norm(f["path"])
+        if not path.startswith("backend/") or not path.endswith("serializers.py"):
+            continue
+        new_text, changed = _fix_register_serializer_text(f["content"])
+        if changed:
+            f["content"] = new_text
+            print(f"[django-password-fixer] made registration hash passwords in {path}")
     return files

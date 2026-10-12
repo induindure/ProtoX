@@ -17,6 +17,12 @@ from app.services.django_auth_fixer import fix_django_auth_views
 from app.services.migration_fixer import drop_generated_migrations
 from app.services.api_client_fixer import fix_api_client_token
 from app.services.provider_fixer import fix_missing_providers, fix_router_placement
+from app.services.django_auth_fixer import fix_django_auth_views, fix_django_user_model
+from app.services.django_auth_fixer import (
+    fix_django_auth_views,
+    fix_django_user_model,
+    fix_register_password_hashing,
+)
 
 load_dotenv()
 
@@ -88,6 +94,16 @@ Backend rules (Django):
 - In development, allow all CORS origins (Django: CORS_ALLOW_ALL_ORIGINS = True with
   django-cors-headers; FastAPI: CORSMiddleware with allow_origin_regex=".*";
   Express: app.use(cors())).
+- Use exactly this layout:
+    backend/manage.py
+    backend/config/settings.py, backend/config/urls.py, backend/config/wsgi.py,
+    backend/config/__init__.py   (DJANGO_SETTINGS_MODULE = "config.settings")
+    backend/<app_name>/models.py, views.py, serializers.py, urls.py, apps.py,
+    admin.py, __init__.py, migrations/__init__.py
+- Never name the project package "backend" or "app".
+- Registration must create users with User.objects.create_user(...) (which hashes
+  the password). Never save passwords with .create() or a plain ModelSerializer save.
+  Password fields are write_only=True.
 
 Backend rules (Node/Express):
 - For password hashing always use "bcryptjs", never "bcrypt" (bcrypt needs native compilation).
@@ -124,6 +140,8 @@ Frontend rules:
   header inside a React useEffect.
 - main.jsx renders, from outside in: <BrowserRouter> → <QueryClientProvider> (if used)
   → <AuthProvider> → <App />. App.jsx contains only <Routes>, never a Router.
+- Forms show the backend's error message: err.response?.data?.detail, never only a
+  generic "Something failed". Show it near the form in red.
 
 User flow (every app):
 - "/" is a landing page: app name, a one-line pitch, 3 feature highlights, and
@@ -163,6 +181,8 @@ Authentication contract (every stack, exactly this):
   (Django: rest_framework_simplejwt JWTAuthentication; FastAPI: OAuth2 bearer;
   Express: a middleware reading the Bearer token).
 - When any request returns 401, the frontend clears the token and redirects to /login.
+- Passwords are always hashed before saving (Django: create_user, FastAPI: passlib/bcrypt,
+  Express: bcryptjs). Never store or compare plain-text passwords.
 
 Frontend robustness:
 - Every page that loads data handles loading, error and empty states.
@@ -348,7 +368,15 @@ async def generate_code(
         parsed["files"]
     )
 
+    parsed["files"] = fix_django_user_model(
+        parsed["files"]
+    )
+
     parsed["files"] = fix_package_json_dependencies(
+        parsed["files"]
+    )
+
+    parsed["files"] = fix_register_password_hashing(
         parsed["files"]
     )
 

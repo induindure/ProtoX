@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    strictPort: true,
     proxy: {
       '/ideas': 'http://localhost:8000',
     },

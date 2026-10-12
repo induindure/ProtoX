@@ -49,19 +49,26 @@ def _find_django(project_dir: Path):
 def run_pytest(project_dir: Path, test_code: str) -> dict:
     backend_dir = project_dir / "backend" if (project_dir / "backend").exists() else project_dir
 
-    # ensure backend is a real importable package
-    init_file = backend_dir / "__init__.py"
-    if not init_file.exists():
-        init_file.write_text("", encoding="utf-8")
-
-    # test file goes at project ROOT, not inside backend/
-    test_file = project_dir / "test_generated.py"
-    test_file.write_text(test_code, encoding="utf-8")
-
-    req_file = backend_dir / "requirements.txt"
     django_root, settings_module = _find_django(project_dir)
     is_django = settings_module is not None
 
+    if is_django:
+        # Django runs from the folder that contains manage.py, exactly like
+        # "python manage.py ...". This makes both layouts work:
+        #   backend/manage.py + backend/backend/settings.py  ("backend.settings")
+        #   backend/manage.py + backend/app/settings.py      ("app.settings")
+        work_dir = django_root
+    else:
+        work_dir = project_dir
+        # FastAPI: backend must be an importable package for "backend.main".
+        init_file = backend_dir / "__init__.py"
+        if not init_file.exists():
+            init_file.write_text("", encoding="utf-8")
+
+    test_file = work_dir / "test_generated.py"
+    test_file.write_text(test_code, encoding="utf-8")
+
+    req_file = backend_dir / "requirements.txt"
     install_note = None
     install_error = None
 
@@ -71,8 +78,7 @@ def run_pytest(project_dir: Path, test_code: str) -> dict:
 
     if req_file.exists() or is_django:
         # Install into a scratch dir INSIDE this run's temp project_dir, never into
-        # the ProtoTest server's own venv. Prepending it to PYTHONPATH makes it take
-        # precedence over the base venv for this subprocess only.
+        # the ProtoTest server's own venv.
         isolated_deps_dir = project_dir / ".protoTest_deps"
         isolated_deps_dir.mkdir(exist_ok=True)
 
@@ -99,14 +105,14 @@ def run_pytest(project_dir: Path, test_code: str) -> dict:
         install_note = "No requirements.txt found, running with base environment."
 
     if is_django:
-        # Make "app.settings" importable and tell Django to use it.
-        pythonpath_parts.append(str(django_root))
         test_env["DJANGO_SETTINGS_MODULE"] = settings_module
+        # Settings may also live one level up (e.g. "backend.settings" with the
+        # package at project root), so make that importable too, AFTER work_dir.
+        pythonpath_parts.append(str(project_dir))
         install_note = (install_note + " " if install_note else "") + \
             f"Django project detected (settings: {settings_module})."
 
-        # Enable database access for all generated tests.
-        conftest = project_dir / "conftest.py"
+        conftest = work_dir / "conftest.py"
         existing = conftest.read_text(encoding="utf-8") if conftest.exists() else ""
         if "_prototest_enable_db" not in existing:
             conftest.write_text(existing + _DJANGO_CONFTEST, encoding="utf-8")
@@ -117,7 +123,6 @@ def run_pytest(project_dir: Path, test_code: str) -> dict:
     if pythonpath_parts:
         test_env["PYTHONPATH"] = os.pathsep.join(pythonpath_parts)
 
-    # Django needs extra time to build its test database.
     timeout = 90 if is_django else 30
 
     pytest_cmd = [sys.executable, "-m", "pytest", "test_generated.py", "-v", "--tb=short"]
@@ -127,7 +132,7 @@ def run_pytest(project_dir: Path, test_code: str) -> dict:
     try:
         result = subprocess.run(
             pytest_cmd,
-            cwd=project_dir,
+            cwd=work_dir,
             capture_output=True,
             text=True,
             encoding="utf-8",
