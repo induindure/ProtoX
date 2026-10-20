@@ -13,18 +13,49 @@ from app.routes.services.llm_utils import strip_code_fences
 load_dotenv()
 
 PYTEST_SYSTEM_PROMPT = """
-You are a senior backend engineer writing pytest tests for a FastAPI/Django project.
-You will be given the full contents of a generated project's files, with paths like "backend/main.py".
+You are a senior backend engineer writing pytest tests for a FastAPI or Django project.
+You will be given the full contents of a generated project's files, with paths like "backend/app/main.py".
 
-The test file will be executed from the project ROOT, with "backend" as a proper
-Python package. Import modules using the full path, e.g. "from backend.main import app"
-or "from backend.database import Base" — keep the "backend." prefix.
-
-Write ONE pytest test file that imports the real modules/functions shown to you
-and tests the main routes/functions with realistic inputs.
+Write ONE pytest test file that imports the real modules shown to you and tests the
+main routes with realistic inputs. Include at least 3 test functions covering the
+main functionality (registration/login and the main feature endpoints).
 
 Return ONLY raw Python test code. No markdown, no explanation, no backticks.
-Include at least 3 test functions covering the main functionality.
+
+TEST WHAT THE CODE ACTUALLY DOES:
+- Read the route code before writing each assertion. Use the exact URL paths,
+  HTTP methods, status codes (e.g. 200 vs 201), JSON field names and error
+  messages that the code really uses. Never invent error messages; if unsure,
+  assert only the status code.
+
+TEST ISOLATION (both frameworks):
+- Tests must not depend on each other. Every test creates its own data with
+  unique usernames and emails (e.g. f"user_{uuid.uuid4().hex[:8]}").
+
+=== FastAPI projects ===
+- The test file runs from the project ROOT with "backend" as a Python package.
+  Import with the full path, keeping the "backend." prefix
+  (e.g. "from backend.app.main import app").
+- Use a pytest fixture that, for EVERY test, creates a fresh in-memory SQLite engine:
+    create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+  runs Base.metadata.create_all on it, and overrides the database dependency.
+- Override the dependency with the REAL FUNCTION OBJECT that the routes use inside
+  Depends(...), imported from the module the routes import it from:
+    app.dependency_overrides[get_db] = override_get_db
+  Never use strings as keys. Clear the overrides after each test.
+- Create the TestClient inside the fixture, after the override is set.
+
+=== Django projects ===
+- The test file runs from the folder that contains manage.py, with pytest-django
+  already configured and database access enabled. Do NOT use a "backend." prefix:
+  import apps by their app name (e.g. "from core.models import Feed").
+- Use rest_framework.test.APIClient. Use the URL paths defined in the project's
+  urls.py files (or reverse() only with names that actually exist there).
+- Use get_user_model() for users; create them with create_user(...).
+- Override ONLY get_db. Never override other dependencies or access FastAPI internals
+  (no __dependencies__).
+- To check the database inside a test, open a session from the test's sessionmaker
+  and use session.query(Model). Never use Model.query (that is Flask-SQLAlchemy).
 """
 
 JEST_SYSTEM_PROMPT = """
@@ -43,6 +74,13 @@ and tests the main routes/functions with realistic inputs.
 
 Return ONLY raw JavaScript test code. No markdown, no explanation, no backticks.
 Include at least 3 test cases covering the main functionality.
+
+TEST WHAT THE CODE ACTUALLY DOES:
+- Use the exact routes, status codes, JSON field names and error messages from the
+  code. Never invent error messages; if unsure, assert only the status code.
+- Every test creates its own data with unique usernames/emails
+  (e.g. `user_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`),
+  so tests never depend on each other.
 """
 
 import re

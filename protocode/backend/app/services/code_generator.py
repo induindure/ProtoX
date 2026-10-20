@@ -23,6 +23,11 @@ from app.services.django_auth_fixer import (
     fix_django_user_model,
     fix_register_password_hashing,
 )
+from app.services.fastapi_fixer import fix_depends_wrappers
+from app.services.undefined_name_fixer import fix_undefined_names
+from app.services.settings_fixer import fix_settings_consistency
+from app.services.circular_import_fixer import fix_imports_from_main
+from app.services.fastapi_fixer import fix_depends_wrappers, fix_login_form_to_json
 
 load_dotenv()
 
@@ -76,6 +81,14 @@ Backend structure rules (FastAPI):
   crud.py: database functions only.
 - Use Pydantic v2 syntax. Import BaseSettings from "pydantic_settings"
   (`from pydantic_settings import BaseSettings`), never from "pydantic".
+- Dependency functions return values (a session, a user), never Depends(...).
+  Routes use Depends(get_db) directly; if a deps.py exists, it only re-exports:
+  `from .database import get_db`.
+- main.py only creates the app, adds middleware and includes routers. Nothing
+  imports from main.py. Shared dependencies (get_db, get_current_user, the OAuth2
+  scheme) live in dependencies.py.
+- The login route takes a JSON body (a Pydantic model with username and password).
+  Never use OAuth2PasswordRequestForm for login.
 
 Backend rules (Django):
 - settings.py is a plain Django settings module: UPPERCASE variables at module level
@@ -377,6 +390,26 @@ async def generate_code(
     )
 
     parsed["files"] = fix_register_password_hashing(
+        parsed["files"]
+    )
+
+    parsed["files"] = fix_depends_wrappers(
+        parsed["files"]
+    )
+
+    parsed["files"] = fix_login_form_to_json(
+        parsed["files"]
+    )
+
+    parsed["files"] = fix_imports_from_main(
+        parsed["files"]
+    )
+
+    parsed["files"] = fix_undefined_names(
+        parsed["files"]
+    )
+
+    parsed["files"] = fix_settings_consistency(
         parsed["files"]
     )
 

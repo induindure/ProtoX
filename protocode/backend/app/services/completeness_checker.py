@@ -78,6 +78,17 @@ def find_missing_modules(files: list[dict]) -> dict:
                 target = base.joinpath(*module.split("."))
                 if not exists(target):
                     missing.setdefault(f"{target}.py", []).append((path_str, line))
+                elif str(target) in dirs and f"{target}.py" not in paths:
+                    # `from .routers import auth`: the names may be modules
+                    # inside the package. Check each one exists.
+                    init_text = contents.get(f"{target}/__init__.py", "")
+                    for n in names.split(","):
+                        n = n.split(" as ")[0].strip().strip("()")
+                        if not n or n == "*":
+                            continue
+                        if exists(target / n) or re.search(rf"\b{re.escape(n)}\b", init_text):
+                            continue
+                        missing.setdefault(f"{target / n}.py", []).append((path_str, line))
             else:
                 # `from . import a, b`: each name must be a module or be in __init__.py
                 init_text = contents.get(f"{base}/__init__.py", "")

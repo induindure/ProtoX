@@ -1,19 +1,30 @@
 """
-Fixes a common AI generation mistake: `from .. import x` (look one
-package up) when x actually lives in the same folder. Rewrites it to
-`from . import x` when the `..` version is guaranteed to fail.
+Fixes relative imports that point at the wrong package level:
+- `from .. import x` when x is actually in the same folder  -> `from . import x`
+- `from .x import y` when x is actually one folder up       -> `from ..x import y`
+Only rewrites when the current form is guaranteed to fail and the
+other form points at a file that really exists.
 """
 
 import re
 from pathlib import PurePosixPath
 
-_PARENT_IMPORT = re.compile(
-    r"^(\s*)from \.\.(\w*) import (.+)$", re.MULTILINE
-)
+_PARENT_IMPORT = re.compile(r"^(\s*)from \.\.(\w*) import (.+)$", re.MULTILINE)
+_SIBLING_IMPORT = re.compile(r"^(\s*)from \.(\w*) import (.+)$", re.MULTILINE)
 
 
 def _norm(p: str) -> str:
     return p.replace("\\", "/").lstrip("./")
+
+
+def _targets(module: str, names: str) -> list[str]:
+    if module:
+        return [module]
+    return [
+        n.split(" as ")[0].strip()
+        for n in names.strip("() \r").split(",")
+        if n.strip()
+    ]
 
 
 def fix_relative_imports(files: list[dict]) -> list[dict]:
@@ -35,28 +46,30 @@ def fix_relative_imports(files: list[dict]) -> list[dict]:
         here = path.parent
         parent = here.parent
 
-        def repl(m, path=path, here=here, parent=parent):
+        # `from .. import x` that should be `from . import x`
+        def fix_parent(m, path=path, here=here, parent=parent):
             indent, module, names = m.groups()
-            if module:
-                targets = [module]
-            else:
-                targets = [
-                    n.split(" as ")[0].strip()
-                    for n in names.strip("() \r").split(",")
-                    if n.strip()
-                ]
-
-            # If anything really exists one level up, leave it alone.
+            targets = _targets(module, names)
             if any(exists(parent, t) for t in targets):
                 return m.group(0)
-
-            # If nothing exists in this folder either, we can't help.
             if not any(exists(here, t) for t in targets):
                 return m.group(0)
-
-            print(f"[import_fixer] {path}: fixed 'from ..' -> 'from .'")
+            print(f"[import_fixer] {path}: 'from ..' -> 'from .'")
             return f"{indent}from .{module} import {names}"
 
-        f["content"] = _PARENT_IMPORT.sub(repl, f["content"])
+        # `from .x import y` that should be `from ..x import y`
+        def fix_sibling(m, path=path, here=here, parent=parent):
+            indent, module, names = m.groups()
+            targets = _targets(module, names)
+            if any(exists(here, t) for t in targets):
+                return m.group(0)
+            if str(parent) in (".", "") or not any(exists(parent, t) for t in targets):
+                return m.group(0)
+            print(f"[import_fixer] {path}: 'from .' -> 'from ..'")
+            return f"{indent}from ..{module} import {names}"
+
+        content = _PARENT_IMPORT.sub(fix_parent, f["content"])
+        content = _SIBLING_IMPORT.sub(fix_sibling, content)
+        f["content"] = content
 
     return files

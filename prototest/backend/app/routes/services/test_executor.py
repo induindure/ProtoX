@@ -34,6 +34,19 @@ _DJANGO_TEST_EXTRAS = [
     "dj-database-url",
 ]
 
+# Packages FastAPI projects commonly use but often leave out of requirements.txt.
+_FASTAPI_TEST_EXTRAS = [
+    "httpx",              # needed by FastAPI's TestClient
+    "email-validator",    # needed for EmailStr fields
+    "python-multipart",   # needed for form data / OAuth2 login forms
+    "pydantic-settings",
+    "python-dotenv",
+    "python-jose[cryptography]",
+    "pyjwt",
+    "passlib[bcrypt]",
+    "bcrypt==4.0.1",      # newer bcrypt breaks passlib
+]
+
 def _find_django(project_dir: Path):
     """Finds manage.py anywhere in the project. Returns (django_root, settings_module),
     or (None, None) if this isn't a Django project."""
@@ -91,6 +104,8 @@ def run_pytest(project_dir: Path, test_code: str) -> dict:
             install_cmd += ["-r", str(req_file)]
         if is_django:
             install_cmd += _DJANGO_TEST_EXTRAS
+        else:
+            install_cmd += _FASTAPI_TEST_EXTRAS
 
         install = subprocess.run(
             install_cmd, cwd=project_dir, capture_output=True, text=True,

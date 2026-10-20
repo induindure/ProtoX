@@ -565,6 +565,7 @@ MAX_FIX_ATTEMPTS = 3
 
 _FIX_ALWAYS_SEND = {
     "settings.py", "urls.py", "main.py", "models.py", "database.py", "config.py",
+    "deps.py", "dependencies.py",
     "requirements.txt", "package.json", "app.js", "server.js", "index.js",
     "schema.prisma",
 }

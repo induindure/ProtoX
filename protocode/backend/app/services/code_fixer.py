@@ -53,8 +53,11 @@ def fix_code(error_log: str, files: list[dict], all_paths: list[str], tech_stack
     if start == -1 or end == -1:
         return {"explanation": "AI returned no usable fix", "files": []}
 
-    data = json.loads(text[start:end + 1])
-
+    try:
+        data = json.loads(text[start:end + 1], strict=False)
+    except json.JSONDecodeError as e:
+        print(f"[code-fixer] AI returned invalid JSON: {e}")
+        return {"explanation": "AI returned an unreadable fix", "files": []}
     fixed = []
     for f in data.get("files", []):
         path = _norm(f.get("path", ""))
