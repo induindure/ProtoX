@@ -13,45 +13,23 @@ from app.routes.services.test_generator import _is_backend_file
 
 import asyncio
 import urllib.request
+from app.routes.services.llm_provider import complete
 
 load_dotenv()
-
-
-def _client():
-    api_key = os.environ.get("GROQ_API_KEY")
-    if not api_key:
-        raise RuntimeError("GROQ_API_KEY is not set")
-    from groq import Groq
-    return Groq(api_key=api_key)
-
 
 async def fix_syntax_error(path: str, content: str, error_message: str) -> str:
     """
     Fixes a single file that failed check_syntax. The error is self-contained
     to this file, so no other project context is needed.
     """
-    client = _client()
+    raw = (await asyncio.to_thread(
+        complete,
+        "You are a senior engineer fixing a syntax error in a generated project file. "
+        "Return ONLY the full corrected file content. No markdown, no explanation, no backticks.",
+        f"File: {path}\n\nSyntax error: {error_message}\n\nFile content:\n{content}",
+        8000,
+    )).strip()
 
-    response = client.chat.completions.create(
-        model="openai/gpt-oss-120b",
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "You are a senior engineer fixing a syntax error in a generated project file. "
-                    "Return ONLY the full corrected file content. No markdown, no explanation, no backticks."
-                ),
-            },
-            {
-                "role": "user",
-                "content": f"File: {path}\n\nSyntax error: {error_message}\n\nFile content:\n{content}",
-            },
-        ],
-        max_tokens=3000,
-        reasoning_effort="low",
-    )
-
-    raw = response.choices[0].message.content.strip()
     return strip_code_fences(raw)
 
 PROTOCODE_FIX_URL = "http://localhost:8001/api/fix-code"

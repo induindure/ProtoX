@@ -14,6 +14,7 @@ import re
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.services.completeness_checker import _norm, _parse_json
+from app.services.llm_provider import message_text
 
 CODE_EXTS = (".js", ".jsx", ".ts", ".tsx", ".vue")
 ASSET_EXTS = (".css", ".scss", ".sass", ".less", ".svg", ".png",
@@ -201,7 +202,7 @@ def fill_missing_frontend_exports(files: list[dict], llm, max_rounds: int = 2) -
             response = llm.invoke(
                 [SystemMessage(content=_SYSTEM), HumanMessage(content=prompt)]
             )
-            new_files = _parse_json(response.content)
+            new_files = _parse_json(message_text(response))
         except Exception as e:
             print(f"[frontend-check] could not fix: {e}")
             return files

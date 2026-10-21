@@ -99,6 +99,11 @@ export default function App() {
     (report.test_execution.ran && !report.test_execution.passed)
   )
 
+  const testsPassed =
+    report &&
+    report.summary.syntax_failed === 0 &&
+    report.test_execution?.passed === true
+
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
 
@@ -197,6 +202,7 @@ export default function App() {
             {loading ? 'Running Tests...' : 'Run Tests'}
           </button>
 
+          {testsPassed && (
           <button
             onClick={handleSendToPreview}
             disabled={!project}
@@ -218,6 +224,7 @@ export default function App() {
           >
             Preview App →
           </button>
+          )}
 
           {hasFailures && (
             <button

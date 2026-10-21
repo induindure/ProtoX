@@ -10,6 +10,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_groq import ChatGroq
 
 from app.services.completeness_checker import _norm
+from app.services.llm_provider import get_llm, message_text, parse_json_loose
 
 _SYSTEM = """You are fixing a generated full-stack project that fails when it runs.
 You get the error output, the list of all project files, and the contents of the relevant files.
@@ -27,18 +28,12 @@ Respond with ONLY a JSON object, no explanation outside it, no markdown fences:
 
 
 def _llm():
-    return ChatGroq(
-        api_key=os.getenv("GROQ_API_KEY"),
-        model="openai/gpt-oss-120b",
-        temperature=0.2,
-        max_tokens=16000,
-        reasoning_effort="medium",
-    )
+    return get_llm(max_tokens=16000, temperature=0.2, small=True)
 
 
 def fix_code(error_log: str, files: list[dict], all_paths: list[str], tech_stack: str = "") -> dict:
     context = "\n\n".join(
-        f"### {_norm(f['path'])}\n{f['content'][:12000]}" for f in files
+        f"### {_norm(f['path'])}\n{f['content']}" for f in files
     )
     prompt = (
         f"Tech stack: {tech_stack or 'unknown'}\n\n"
@@ -48,15 +43,10 @@ def fix_code(error_log: str, files: list[dict], all_paths: list[str], tech_stack
     )
 
     response = _llm().invoke([SystemMessage(content=_SYSTEM), HumanMessage(content=prompt)])
-    text = response.content.strip()
-    start, end = text.find("{"), text.rfind("}")
-    if start == -1 or end == -1:
-        return {"explanation": "AI returned no usable fix", "files": []}
-
-    try:
-        data = json.loads(text[start:end + 1], strict=False)
-    except json.JSONDecodeError as e:
-        print(f"[code-fixer] AI returned invalid JSON: {e}")
+    text = message_text(response).strip()
+    data = parse_json_loose(text)
+    if data is None:
+        print(f"[code-fixer] AI returned invalid JSON. Start of reply: {text[:300]!r}")
         return {"explanation": "AI returned an unreadable fix", "files": []}
     fixed = []
     for f in data.get("files", []):

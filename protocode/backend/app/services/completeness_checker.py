@@ -11,6 +11,7 @@ import re
 from pathlib import PurePosixPath
 
 from langchain_core.messages import HumanMessage, SystemMessage
+from app.services.llm_provider import message_text
 
 _FROM_IMPORT = re.compile(
     r"^\s*from\s+(\.*)([\w.]*)\s+import\s+\(?([^)\n]+)", re.MULTILINE
@@ -147,7 +148,7 @@ def fill_missing_files(files: list[dict], llm, max_rounds: int = 2) -> list[dict
             response = llm.invoke(
                 [SystemMessage(content=_SYSTEM), HumanMessage(content=prompt)]
             )
-            new_files = _parse_json(response.content)
+            new_files = _parse_json(message_text(response))
         except Exception as e:
             print(f"[completeness] could not generate missing files: {e}")
             return files

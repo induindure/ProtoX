@@ -9,6 +9,8 @@ from pathlib import Path
 import re
 
 from app.routes.services.llm_utils import strip_code_fences
+import asyncio
+from app.routes.services.llm_provider import complete
 
 load_dotenv()
 
@@ -44,6 +46,10 @@ TEST ISOLATION (both frameworks):
     app.dependency_overrides[get_db] = override_get_db
   Never use strings as keys. Clear the overrides after each test.
 - Create the TestClient inside the fixture, after the override is set.
+- Override ONLY get_db. Never override other dependencies or access FastAPI internals
+  (no __dependencies__).
+- To check the database inside a test, open a session from the test's sessionmaker
+  and use session.query(Model). Never use Model.query (that is Flask-SQLAlchemy).
 
 === Django projects ===
 - The test file runs from the folder that contains manage.py, with pytest-django
@@ -52,10 +58,6 @@ TEST ISOLATION (both frameworks):
 - Use rest_framework.test.APIClient. Use the URL paths defined in the project's
   urls.py files (or reverse() only with names that actually exist there).
 - Use get_user_model() for users; create them with create_user(...).
-- Override ONLY get_db. Never override other dependencies or access FastAPI internals
-  (no __dependencies__).
-- To check the database inside a test, open a session from the test's sessionmaker
-  and use session.query(Model). Never use Model.query (that is Flask-SQLAlchemy).
 """
 
 JEST_SYSTEM_PROMPT = """
@@ -112,33 +114,27 @@ async def generate_test_file(files: list, runner: str) -> str:
     runner: "pytest" or "jest"
     Returns raw test file content as a string.
     """
-    api_key = os.environ.get("GROQ_API_KEY")
-    if not api_key:
-        raise RuntimeError("GROQ_API_KEY is not set")
-
-    from groq import Groq
-    client = Groq(api_key=api_key)
-
     system_prompt = PYTEST_SYSTEM_PROMPT if runner == "pytest" else JEST_SYSTEM_PROMPT
 
-    # only send backend-relevant files, keep prompt size sane
+    # only send backend-relevant files, in FULL, within a size budget
     relevant = [f for f in files if _is_backend_file(f.path, runner)]
+    parts, budget = [], 120_000
+    for f in relevant:
+        if len(f.content) > budget:
+            continue
+        budget -= len(f.content)
+        parts.append(f"--- {f.path} ---\n{f.content}")
+    file_dump = "\n\n".join(parts)
 
-    file_dump = "\n\n".join(
-        f"--- {f.path} ---\n{f.content[:2000]}" for f in relevant
+    user_prompt = (
+        "Here are the project's backend files. Write the test file now.\n\n"
+        f"{file_dump}"
     )
 
-    response = client.chat.completions.create(
-        model="openai/gpt-oss-120b",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Project files:\n\n{file_dump}"},
-        ],
-        max_tokens=3000,
-        reasoning_effort="low",
-    )
+    raw = (await asyncio.to_thread(
+        complete, system_prompt, user_prompt, 8000
+    )).strip()
 
-    raw = response.choices[0].message.content.strip()
     raw = strip_code_fences(raw)
 
     if runner == "jest":

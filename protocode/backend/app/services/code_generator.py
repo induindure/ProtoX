@@ -35,6 +35,9 @@ from app.services.fastapi_fixer import fix_depends_wrappers, fix_login_form_to_j
 from app.services.circular_import_fixer import fix_circular_imports
 from app.services.vue_fixer import fix_vue_react_libs
 from app.services.attribute_fixer import fix_module_attributes
+from app.services.vue_fixer import fix_vue_react_libs, fix_vue_jsx
+from app.services.llm_provider import get_llm, message_text
+from app.services.bad_import_fixer import fix_nonexistent_imports
 
 load_dotenv()
 
@@ -172,6 +175,8 @@ Frontend rules:
   Stores and components never call axios or fetch directly.
 - Vue projects use Vue libraries only: lucide-vue-next for icons (never lucide-react),
   pinia for state, vue-router for routing.
+- Vue projects: every component is a .vue single-file component (<template> + <script setup>).
+  The entry file is src/main.js. Never create .jsx or .tsx files in a Vue project.
 
 User flow (every app):
 - "/" is a landing page: app name, a one-line pitch, 3 feature highlights, and
@@ -273,13 +278,7 @@ async def generate_code(
     tech_stack: str,
     database_url: str | None = None
 ):
-    llm = ChatGroq(
-        api_key=os.getenv("GROQ_API_KEY"),
-        model="openai/gpt-oss-120b",
-        temperature=0.5,
-        max_tokens=32000,
-        reasoning_effort="low",
-    )
+    llm = get_llm(max_tokens=32000)
 
     user_content = f"App idea:\n{idea}\n\nTech stack: {tech_stack}"
 
@@ -306,7 +305,7 @@ async def generate_code(
         response.response_metadata
     )
 
-    raw = response.content.strip()
+    raw = message_text(response).strip()
 
     if raw.startswith("```"):
         raw = raw.split("```")[1]
@@ -410,6 +409,10 @@ async def generate_code(
         parsed["files"]
     )
 
+    parsed["files"] = fix_vue_jsx(
+        parsed["files"]
+    )
+
     parsed["files"] = fix_package_json_dependencies(
         parsed["files"]
     )
@@ -431,6 +434,10 @@ async def generate_code(
     )
 
     parsed["files"] = fix_module_attributes(
+        parsed["files"]
+    )
+
+    parsed["files"] = fix_nonexistent_imports(
         parsed["files"]
     )
 
