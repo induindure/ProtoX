@@ -788,6 +788,43 @@ def _add_fastapi_path_compat(backend_dir: Path, log: deque):
             )
             return
 
+# Ports generated frontends commonly hardcode for "the backend".
+_HARDCODED_BACKEND = re.compile(
+    r"https?://(?:localhost|127\.0\.0\.1):(?:8000|8001|8080|5000|3001)\b"
+)
+
+
+def _point_frontend_at_backend(frontend_dir: Path, api_url: str, log: deque):
+    """
+    Rewrites hardcoded backend addresses in the frontend (vite.config proxy
+    targets, .env files, fallback URLs in code) to the real preview backend.
+    Port 8000 matters most: on this machine it belongs to another ProtoX module.
+    """
+    m = re.match(r"https?://[^/]+", api_url or "")
+    if not m:
+        return
+    backend_root = m.group(0)  # e.g. http://localhost:62393 (no /api)
+
+    candidates = [
+        p for p in frontend_dir.rglob("*")
+        if p.is_file()
+        and not any(part in SKIP_DIRS for part in p.parts)
+        and (
+            p.name.startswith(("vite.config", "next.config", ".env"))
+            or (p.suffix in (".js", ".jsx", ".ts", ".tsx", ".vue") and "src" in p.parts)
+        )
+    ]
+
+    for path in candidates:
+        try:
+            text = path.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        new_text = _HARDCODED_BACKEND.sub(backend_root, text)
+        if new_text != text:
+            path.write_text(new_text, encoding="utf-8")
+            log.append(f"[frontend] pointed {path.relative_to(frontend_dir)} at the preview backend")
+
 def _run_side(name: str, cwd: Path, cmds: dict, state: dict):
     log = state["log"]
 
@@ -819,6 +856,7 @@ def _run_side(name: str, cwd: Path, cmds: dict, state: dict):
     if name == "frontend":
         _ensure_frontend_index(cwd, log)
         _ensure_tailwind(cwd, log)
+        _point_frontend_at_backend(cwd, cmds["env"].get("VITE_API_URL", ""), log)
 
     # ---------- Python backend preparation ----------
     if name == "backend" and any("pip" in str(p).lower() for p in install_cmd):

@@ -33,6 +33,8 @@ from app.services.settings_fixer import fix_settings_consistency
 from app.services.circular_import_fixer import fix_circular_imports
 from app.services.fastapi_fixer import fix_depends_wrappers, fix_login_form_to_json
 from app.services.circular_import_fixer import fix_circular_imports
+from app.services.vue_fixer import fix_vue_react_libs
+from app.services.attribute_fixer import fix_module_attributes
 
 load_dotenv()
 
@@ -165,6 +167,11 @@ Frontend rules:
   → <AuthProvider> → <App />. App.jsx contains only <Routes>, never a Router.
 - Forms show the backend's error message: err.response?.data?.detail, never only a
   generic "Something failed". Show it near the form in red.
+- Never use a Vite dev-server proxy. Every request goes through the single API client,
+  whose baseURL is import.meta.env.VITE_API_URL (fallback "http://localhost:8000/api").
+  Stores and components never call axios or fetch directly.
+- Vue projects use Vue libraries only: lucide-vue-next for icons (never lucide-react),
+  pinia for state, vue-router for routing.
 
 User flow (every app):
 - "/" is a landing page: app name, a one-line pitch, 3 feature highlights, and
@@ -399,6 +406,10 @@ async def generate_code(
         parsed["files"]
     )
 
+    parsed["files"] = fix_vue_react_libs(
+        parsed["files"]
+    )
+
     parsed["files"] = fix_package_json_dependencies(
         parsed["files"]
     )
@@ -416,6 +427,10 @@ async def generate_code(
     )
 
     parsed["files"] = fix_circular_imports(
+        parsed["files"]
+    )
+
+    parsed["files"] = fix_module_attributes(
         parsed["files"]
     )
 
