@@ -42,7 +42,7 @@ def fix_code(error_log: str, files: list[dict], all_paths: list[str], tech_stack
     )
     prompt = (
         f"Tech stack: {tech_stack or 'unknown'}\n\n"
-        f"Error output:\n{error_log[-8000:]}\n\n"
+        f"Error output:\n{error_log[-16000:]}\n\n"
         f"All files in the project:\n" + "\n".join(all_paths[:400]) + "\n\n"
         f"Relevant files:\n\n{context}"
     )

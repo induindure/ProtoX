@@ -117,6 +117,7 @@ async def auto_fix(request: TestRequest):
     final_execution = None
     success = False
 
+    test_code = None
     for attempt in range(1, MAX_AUTO_FIX_ATTEMPTS + 1):
         syntax_results = [
             {"path": path, "syntax": check_syntax(path, content)}
@@ -156,7 +157,8 @@ async def auto_fix(request: TestRequest):
         project_dir = None
         try:
             project_dir = build_project_dir(file_inputs)
-            test_code = await generate_test_file(file_inputs, runner)
+            if test_code is None:
+                test_code = await generate_test_file(file_inputs, runner)
             if runner == "pytest":
                 execution = run_pytest(project_dir, test_code)
             else:

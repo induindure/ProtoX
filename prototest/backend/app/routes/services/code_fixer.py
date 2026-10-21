@@ -11,6 +11,9 @@ from dotenv import load_dotenv
 from app.routes.services.llm_utils import strip_code_fences
 from app.routes.services.test_generator import _is_backend_file
 
+import asyncio
+import urllib.request
+
 load_dotenv()
 
 
@@ -51,54 +54,77 @@ async def fix_syntax_error(path: str, content: str, error_message: str) -> str:
     raw = response.choices[0].message.content.strip()
     return strip_code_fences(raw)
 
+PROTOCODE_FIX_URL = "http://localhost:8001/api/fix-code"
+
+# Files that often hold the real cause even when the error doesn't name them.
+_KEY_FILES = {
+    "main.py", "models.py", "schemas.py", "crud.py", "database.py", "config.py",
+    "security.py", "deps.py", "dependencies.py", "settings.py", "urls.py",
+    "views.py", "serializers.py", "requirements.txt", "package.json",
+    "app.js", "server.js", "index.js",
+}
+
+
+def _norm_path(p: str) -> str:
+    return p.replace("\\", "/").lstrip("./")
+
+
+def _post_fix(payload: dict) -> dict:
+    request = urllib.request.Request(
+        PROTOCODE_FIX_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=240) as response:
+        return json.loads(response.read().decode("utf-8"))
+
 
 async def fix_test_failure(files: list, stdout: str, stderr: str, test_code: str, runner: str) -> list[dict] | None:
     """
-    files: request.files-style objects with .path / .content
-    Returns a list of {"path": ..., "content": ...} patches to apply, or
-    None if the LLM couldn't determine a fix (empty/unparseable response).
+    Sends the failing test output and the relevant project files to ProtoCode's
+    shared fixer (/api/fix-code). Returns [{"path", "content"}] patches, or None.
     """
-    client = _client()
+    output = f"{stdout[-6000:]}\n{stderr[-2000:]}"
+    contents = {_norm_path(f.path): f.content for f in files}
+    paths = list(contents)
 
-    relevant = [f for f in files if _is_backend_file(f.path, runner)]
-    file_dump = "\n\n".join(f"--- {f.path} ---\n{f.content[:2000]}" for f in relevant)
+    # Files named in the traceback first, then key files, all in FULL.
+    mentioned = [p for p in paths if p in output or p.replace("/", "\\") in output]
+    key = [
+        p for p in paths
+        if p not in mentioned and p.rsplit("/", 1)[-1] in _KEY_FILES
+    ]
+    selected, budget = [], 150_000
+    for p in mentioned + key:
+        content = contents[p]
+        if len(content) > budget:
+            continue
+        budget -= len(content)
+        selected.append({"path": p, "content": content})
 
-    system_prompt = (
-        "You are a senior engineer. A test file was written and run against the application "
-        "files below, and it failed. Diagnose the failure from the test output and fix the "
-        "APPLICATION code (never the test file) so the tests pass.\n\n"
-        'Return ONLY raw JSON: an array of objects with "path" and "content" keys, one per '
-        "file you changed, containing that file's FULL corrected content. Omit files you didn't "
-        "change. No markdown, no explanation, no backticks."
+    error_log = (
+        f"Test output:\n{output}\n\n"
+        f"Test file (NOT part of the project, do not change it):\n{test_code[:3000]}\n\n"
+        "These automated tests were run against the application and FAILED. "
+        "Fix the APPLICATION code so the tests pass. Never change the test file."
     )
-
-    user_prompt = (
-        f"Test file (do not modify):\n{test_code}\n\n"
-        f"Test run stdout:\n{stdout[-3000:]}\n\n"
-        f"Test run stderr:\n{stderr[-1500:]}\n\n"
-        f"Application files:\n{file_dump}"
-    )
-
-    response = client.chat.completions.create(
-        model="openai/gpt-oss-120b",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        max_tokens=4000,
-        reasoning_effort="low",
-    )
-
-    raw = response.choices[0].message.content.strip()
-    raw = strip_code_fences(raw)
 
     try:
-        patches = json.loads(raw)
-    except json.JSONDecodeError:
+        result = await asyncio.to_thread(
+            _post_fix,
+            {"error_log": error_log, "files": selected, "all_paths": paths},
+        )
+    except Exception as e:
+        print(f"[auto-fix] could not reach ProtoCode: {e}")
         return None
 
-    if not isinstance(patches, list) or not patches:
-        return None
+    if result.get("explanation"):
+        print(f"[auto-fix] {result['explanation']}")
 
-    valid = [p for p in patches if isinstance(p, dict) and "path" in p and "content" in p]
-    return valid or None
+    patches = [
+        {"path": f["path"], "content": f["content"]}
+        for f in result.get("files", [])
+        if f.get("path") and f.get("content")
+    ]
+    return patches or None
