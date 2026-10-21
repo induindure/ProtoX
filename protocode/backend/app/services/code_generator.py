@@ -23,11 +23,16 @@ from app.services.django_auth_fixer import (
     fix_django_user_model,
     fix_register_password_hashing,
 )
-from app.services.fastapi_fixer import fix_depends_wrappers
+from app.services.fastapi_fixer import (
+    fix_depends_wrappers,
+    fix_login_form_to_json,
+    fix_double_depends,
+)
 from app.services.undefined_name_fixer import fix_undefined_names
 from app.services.settings_fixer import fix_settings_consistency
-from app.services.circular_import_fixer import fix_imports_from_main
+from app.services.circular_import_fixer import fix_circular_imports
 from app.services.fastapi_fixer import fix_depends_wrappers, fix_login_form_to_json
+from app.services.circular_import_fixer import fix_circular_imports
 
 load_dotenv()
 
@@ -84,11 +89,16 @@ Backend structure rules (FastAPI):
 - Dependency functions return values (a session, a user), never Depends(...).
   Routes use Depends(get_db) directly; if a deps.py exists, it only re-exports:
   `from .database import get_db`.
-- main.py only creates the app, adds middleware and includes routers. Nothing
-  imports from main.py. Shared dependencies (get_db, get_current_user, the OAuth2
-  scheme) live in dependencies.py.
+- Module layering (a module may only import modules to its LEFT; never import upward):
+  config.py (settings, SECRET_KEY, ALGORITHM) -> database.py (engine, SessionLocal, Base,
+  get_db) -> models.py -> schemas.py -> security.py (password hashing, create_access_token)
+  -> crud.py -> dependencies.py (get_current_user) -> routers/*.py -> main.py.
+- Routes live only in routers/. auth.py-style modules must not mix helpers and routes.
+- main.py only creates the app, adds middleware and includes routers. Nothing imports from it.
 - The login route takes a JSON body (a Pydantic model with username and password).
   Never use OAuth2PasswordRequestForm for login.
+- Write dependencies only as Depends(get_db) / Depends(get_current_user) directly in route
+  signatures. Never store Depends(...) in a variable, and never wrap Depends twice.
 
 Backend rules (Django):
 - settings.py is a plain Django settings module: UPPERCASE variables at module level
@@ -196,6 +206,10 @@ Authentication contract (every stack, exactly this):
 - When any request returns 401, the frontend clears the token and redirects to /login.
 - Passwords are always hashed before saving (Django: create_user, FastAPI: passlib/bcrypt,
   Express: bcryptjs). Never store or compare plain-text passwords.
+- Every backend serves ALL routes under the /api prefix
+  (FastAPI: app.include_router(router, prefix="/api"); Django: path("api/", include(...));
+  Express: app.use("/api", router)).
+- The frontend's API base URL includes /api, e.g. VITE_API_URL=http://localhost:8000/api.
 
 Frontend robustness:
 - Every page that loads data handles loading, error and empty states.
@@ -401,7 +415,7 @@ async def generate_code(
         parsed["files"]
     )
 
-    parsed["files"] = fix_imports_from_main(
+    parsed["files"] = fix_circular_imports(
         parsed["files"]
     )
 
@@ -410,6 +424,10 @@ async def generate_code(
     )
 
     parsed["files"] = fix_settings_consistency(
+        parsed["files"]
+    )
+
+    parsed["files"] = fix_double_depends(
         parsed["files"]
     )
 

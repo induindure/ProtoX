@@ -82,3 +82,35 @@ def fix_login_form_to_json(files: list[dict]) -> list[dict]:
         print(f"[fastapi-fixer] login now accepts JSON in {path}")
 
     return files
+
+# Module-level aliases like:  db_dep = Depends(get_db)
+_DEPENDS_ALIAS = re.compile(r"^(\w+)\s*=\s*Depends\(", re.MULTILINE)
+
+
+def fix_double_depends(files: list[dict]) -> list[dict]:
+    """
+    `x = Depends(get_db)` is fine on its own, but `Depends(x)` then wraps the
+    placeholder twice and FastAPI crashes ("Depends(...) is not a callable
+    object"). Unwraps every Depends(<alias>) to just <alias>, across files.
+    """
+    backend = [
+        f for f in files
+        if _norm(f["path"]).startswith("backend/") and _norm(f["path"]).endswith(".py")
+    ]
+
+    aliases = set()
+    for f in backend:
+        aliases.update(m.group(1) for m in _DEPENDS_ALIAS.finditer(f["content"]))
+    if not aliases:
+        return files
+
+    names = "|".join(re.escape(a) for a in sorted(aliases))
+    # Depends(db_dep) or Depends(deps.db_dep) -> db_dep / deps.db_dep
+    pattern = re.compile(rf"Depends\(\s*((?:[\w]+\.)*(?:{names}))\s*\)")
+
+    for f in backend:
+        new_text = pattern.sub(lambda m: m.group(1), f["content"])
+        if new_text != f["content"]:
+            f["content"] = new_text
+            print(f"[fastapi-fixer] removed double Depends(...) in {_norm(f['path'])}")
+    return files

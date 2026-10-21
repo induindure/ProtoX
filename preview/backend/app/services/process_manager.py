@@ -726,6 +726,68 @@ def _fix_cors(backend_dir: Path, log: deque):
                     path.write_text(new_text, encoding="utf-8")
                     log.append(f"[backend] opened CORS in {path.relative_to(backend_dir)}")
 
+_FASTAPI_PATH_SHIM = '''
+
+# --- added by Preview: tolerate "/api" prefix and trailing-slash differences ---
+from starlette.routing import Match as _PreviewMatch
+
+
+class _PreviewPathCompat:
+    """Maps /api/auth/register/ -> /auth/register (or similar) when only
+    that variant exists, so frontend and backend URL styles don't have to match."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") == "http":
+            path = scope.get("path", "")
+            variants = [path]
+            if path == "/api" or path.startswith("/api/"):
+                variants.append(path[4:] or "/")
+            for v in list(variants):
+                if v.endswith("/") and len(v) > 1:
+                    variants.append(v.rstrip("/"))
+                else:
+                    variants.append(v + "/")
+            for v in variants:
+                probe = dict(scope, path=v)
+                if any(r.matches(probe)[0] == _PreviewMatch.FULL for r in APPNAME.router.routes):
+                    if v != path:
+                        scope = dict(scope, path=v, raw_path=v.encode())
+                    break
+        await self.app(scope, receive, send)
+
+
+APPNAME.add_middleware(_PreviewPathCompat)
+'''
+
+
+def _add_fastapi_path_compat(backend_dir: Path, log: deque):
+    """Adds the path-compat middleware to the file that creates the FastAPI app."""
+    for root, dirs, files in os.walk(backend_dir):
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+        for fname in files:
+            if not fname.endswith(".py"):
+                continue
+            path = Path(root) / fname
+            try:
+                text = path.read_text(encoding="utf-8")
+            except Exception:
+                continue
+            m = re.search(r"^(\w+)\s*=\s*FastAPI\(", text, re.MULTILINE)
+            if not m or "_PreviewPathCompat" in text:
+                continue
+            path.write_text(
+                text.rstrip() + _FASTAPI_PATH_SHIM.replace("APPNAME", m.group(1)),
+                encoding="utf-8",
+            )
+            log.append(
+                f"[backend] added /api + trailing-slash compatibility to "
+                f"{path.relative_to(backend_dir)}"
+            )
+            return
+
 def _run_side(name: str, cwd: Path, cmds: dict, state: dict):
     log = state["log"]
 
@@ -811,6 +873,7 @@ def _run_side(name: str, cwd: Path, cmds: dict, state: dict):
                 init_file.write_text("", encoding="utf-8")
             run_cwd = cwd.parent
             env["PYTHONPATH"] = str(cwd) + os.pathsep + env.get("PYTHONPATH", "")
+            _add_fastapi_path_compat(cwd, log)
             create_tables = True
 
         elif run_cmd and run_cmd[0] == "python":

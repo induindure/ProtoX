@@ -194,6 +194,22 @@ def _api_path_suffix(frontend_dir: Path) -> str:
 
     return ""
 
+def _backend_uses_prefix(backend_dir: Path, suffix: str) -> bool:
+    """True if the backend's code actually serves routes under `suffix` (e.g. '/api')."""
+    if not suffix or not backend_dir.exists():
+        return False
+    bare = suffix.strip("/")
+    needles = (f'"/{bare}', f"'/{bare}", f'"{bare}/', f"'{bare}/")
+    for f in backend_dir.rglob("*"):
+        if f.suffix not in (".py", ".js", ".ts"):
+            continue
+        if any(part in (".preview_venv", "node_modules", "__pycache__") for part in f.parts):
+            continue
+        text = f.read_text(encoding="utf-8", errors="ignore")
+        if any(n in text for n in needles):
+            return True
+    return False
+
 def get_frontend_commands(
     frontend: str,
     port: int,
@@ -212,8 +228,9 @@ def get_frontend_commands(
 
     api_url = backend_api_url
     if frontend_dir is not None:
-        api_url = backend_api_url + _api_path_suffix(frontend_dir)
-
+        suffix = _api_path_suffix(frontend_dir)
+        if _backend_uses_prefix(frontend_dir.parent / "backend", suffix):
+            api_url = backend_api_url + suffix
     env = {name: api_url for name in _API_ENV_NAMES}
     env["PORT"] = str(port)
     env["BROWSER"] = "none"
