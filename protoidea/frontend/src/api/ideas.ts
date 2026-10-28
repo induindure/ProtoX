@@ -1,10 +1,5 @@
-import axios from 'axios'
+import { api } from './client'
 import type { IdeaRequest, IdeaResponse, IdeaListResponse } from '../types'
-
-const api = axios.create({
-  baseURL: 'http://localhost:8000',
-  headers: { 'Content-Type': 'application/json' },
-})
 
 export const generateIdeas = async (payload: IdeaRequest): Promise<IdeaResponse> => {
   const { data } = await api.post<IdeaResponse>('/ideas/generate', payload)

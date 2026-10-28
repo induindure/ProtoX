@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     cookie_secure: bool = False          # set true in production (HTTPS only)
     auth_cookie_name: str = "protox_session"
     verify_token_hours: int = 24
+    verify_code_minutes: int = 10        # a code works for 10 minutes
+    verify_max_attempts: int = 5         # wrong guesses allowed per code
+    unverified_account_hours: int = 24   # unverified signups are deleted after this
 
     # Email (empty SMTP_HOST = print links to the terminal instead of sending)
     smtp_host: str = ""

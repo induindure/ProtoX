@@ -1,5 +1,6 @@
-"""Password hashing, login tokens and one-time email tokens."""
+"""Password hashing, login tokens and one-time verification codes."""
 import hashlib
+import hmac
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -59,13 +60,20 @@ def decode_access_token(token: str) -> uuid.UUID | None:
         return None
 
 
-# ---------- one-time email tokens ----------
+# ---------- 6-digit verification codes ----------
 
-def hash_token(raw_token: str) -> str:
-    return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+def new_verification_code() -> str:
+    """A random 6-digit code, e.g. '048213' (cryptographically secure)."""
+    return f"{secrets.randbelow(1_000_000):06d}"
 
 
-def new_email_token() -> tuple[str, str]:
-    """Return (raw_token_for_the_email_link, hash_to_store_in_the_database)."""
-    raw = secrets.token_urlsafe(32)
-    return raw, hash_token(raw)
+def hash_code(user_id: uuid.UUID, code: str) -> str:
+    """Keyed hash (HMAC-SHA256) of the code. A plain hash of a 6-digit code could be
+    cracked in seconds by someone with database access; without the server's secret
+    key, this one can't."""
+    message = f"{user_id}:{code}".encode("utf-8")
+    return hmac.new(settings.jwt_secret.encode("utf-8"), message, hashlib.sha256).hexdigest()
+
+
+def codes_match(user_id: uuid.UUID, code: str, stored_hash: str) -> bool:
+    return hmac.compare_digest(hash_code(user_id, code), stored_hash)

@@ -34,26 +34,24 @@ def send_email(to: str, subject: str, text_body: str, html_body: str | None = No
             server.send_message(msg)
 
 
-def send_verification_email(to: str, raw_token: str) -> None:
-    link = f"{settings.frontend_url.rstrip('/')}/verify-email?token={raw_token}"
-    hours = settings.verify_token_hours
+def send_verification_code(to: str, code: str) -> None:
+    minutes = settings.verify_code_minutes
 
     text = (
         "Welcome to ProtoX!\n\n"
-        f"Confirm your email address by opening this link (valid for {hours} hours):\n\n"
-        f"{link}\n\n"
-        "If you didn't create a ProtoX account, you can ignore this email."
+        f"Your verification code is: {code}\n\n"
+        f"Enter it on the sign-up page. It expires in {minutes} minutes.\n\n"
+        "If you didn't create a ProtoX account, you can ignore this email. "
+        "Never share this code with anyone."
     )
     html = f"""
     <div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:24px">
       <h2 style="color:#111">Welcome to ProtoX</h2>
-      <p>Confirm your email address to start using your account.</p>
-      <p style="margin:28px 0">
-        <a href="{link}" style="background:#0f9b8e;color:#fff;padding:12px 22px;
-           border-radius:10px;text-decoration:none;font-weight:bold">Verify my email</a>
-      </p>
-      <p style="color:#666;font-size:13px">This link is valid for {hours} hours.
+      <p>Enter this code on the sign-up page to verify your email:</p>
+      <p style="font-size:34px;font-weight:bold;letter-spacing:8px;color:#0f9b8e;
+                background:#f0faf9;padding:16px;text-align:center;border-radius:12px">{code}</p>
+      <p style="color:#666;font-size:13px">It expires in {minutes} minutes. Never share this code with anyone.
          If you didn't create a ProtoX account, you can ignore this email.</p>
     </div>
     """
-    send_email(to, "Verify your ProtoX account", text, html)
+    send_email(to, "Your ProtoX verification code", text, html)

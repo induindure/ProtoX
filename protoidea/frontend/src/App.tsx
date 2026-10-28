@@ -6,6 +6,7 @@ import IdeaForm from './components/IdeaForm'
 import IdeaCard from './components/IdeaCard'
 import HistoryPanel from './components/HistoryPanel'
 import IdeaRefinement from './components/IdeaRefinement'
+import UserMenu from './components/auth/UserMenu'
 
 import { generateIdeas, refineIdea } from './api/ideas'
 import type { RankedIdea, IdeaRequest, IdeaResponse, IdeaModel } from './types'
@@ -88,9 +89,12 @@ export default function App() {
             <span className="text-2xl font-black text-gray-900 tracking-tight">ProtoX</span>
             <span className="text-sm font-semibold bg-brand-teal text-white px-2 py-0.5 rounded-full">ProtoIdea</span>
           </div>
-          <p className="text-xs text-gray-400 hidden sm:block">
-            K. J. Somaiya School of Engineering · B.Tech FYP 2025–27
-          </p>
+          <div className="flex items-center gap-4">
+            <p className="text-xs text-gray-400 hidden md:block">
+              K. J. Somaiya School of Engineering · B.Tech FYP 2025–27
+            </p>
+            <UserMenu />
+          </div>
         </div>
         <div className="h-1 bg-brand-red w-full" />
       </header>

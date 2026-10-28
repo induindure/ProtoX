@@ -1,6 +1,7 @@
-"""Signup, email verification, login, logout."""
+"""Signup with 6-digit email codes, login, logout."""
 from datetime import datetime, timedelta, timezone
 
+from email_validator import EmailNotValidError, validate_email
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.exc import IntegrityError
@@ -10,13 +11,14 @@ from app.config import settings
 from app.db.database import get_db
 from app.deps import get_current_user
 from app.models.user import EmailToken, User
-from app.services.email_service import send_verification_email
+from app.services.email_service import send_verification_code
 from app.services.security import (
     burn_password_check,
+    codes_match,
     create_access_token,
+    hash_code,
     hash_password,
-    hash_token,
-    new_email_token,
+    new_verification_code,
     verify_password,
 )
 
@@ -25,10 +27,10 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 VERIFY_PURPOSE = "verify_email"
 RESEND_COOLDOWN_SECONDS = 60
 
-# Same reply whether or not the email already has an account,
-# so nobody can use signup to find out who uses ProtoX.
-SIGNUP_MESSAGE = "Check your inbox — we've sent a link to verify your email."
-RESEND_MESSAGE = "If an unverified account exists for this email, a new verification link has been sent."
+SIGNUP_MESSAGE = "We've sent a 6-digit code to your email."
+RESEND_MESSAGE = "If this account still needs verifying, a new code has been sent."
+INVALID_CODE = "This code is invalid or has expired. Request a new one."
+TOO_MANY_ATTEMPTS = "Too many incorrect attempts. Request a new code."
 
 
 # ---------- request / response shapes ----------
@@ -47,8 +49,9 @@ class EmailRequest(BaseModel):
     email: EmailStr
 
 
-class TokenRequest(BaseModel):
-    token: str = Field(min_length=10, max_length=200)
+class VerifyCodeRequest(BaseModel):
+    email: EmailStr
+    code: str = Field(min_length=1, max_length=20)
 
 
 class UserOut(BaseModel):
@@ -86,8 +89,28 @@ def _set_session_cookie(response: Response, user: User) -> None:
     )
 
 
-def _issue_verification(db: Session, user: User, background_tasks: BackgroundTasks) -> None:
-    """Create a fresh verification token and email it (at most once a minute)."""
+def _check_email_domain(email: str) -> None:
+    """Reject addresses whose domain has no mail server (fake domains, typos like gmial.con)."""
+    try:
+        validate_email(email, check_deliverability=True)
+    except EmailNotValidError:
+        raise HTTPException(
+            status_code=400,
+            detail="This email address can't receive mail. Please check it for typos.",
+        )
+
+
+def _delete_stale_unverified(db: Session) -> None:
+    """Remove signups that were never verified, so dummy accounts don't pile up."""
+    cutoff = _now() - timedelta(hours=settings.unverified_account_hours)
+    db.query(User).filter(User.is_verified.is_(False), User.created_at < cutoff).delete(
+        synchronize_session=False
+    )
+    db.commit()
+
+
+def _issue_code(db: Session, user: User, background_tasks: BackgroundTasks) -> None:
+    """Create a fresh 6-digit code and email it (at most once a minute)."""
     latest = (
         db.query(EmailToken)
         .filter(EmailToken.user_id == user.id, EmailToken.purpose == VERIFY_PURPOSE)
@@ -97,22 +120,22 @@ def _issue_verification(db: Session, user: User, background_tasks: BackgroundTas
     if latest and latest.created_at and (_now() - latest.created_at).total_seconds() < RESEND_COOLDOWN_SECONDS:
         return
 
-    # Old unused links stop working once a new one is sent
+    # Only the newest code works
     db.query(EmailToken).filter(
         EmailToken.user_id == user.id,
         EmailToken.purpose == VERIFY_PURPOSE,
-        EmailToken.used_at.is_(None),
     ).delete(synchronize_session=False)
 
-    raw_token, token_hash = new_email_token()
+    code = new_verification_code()
     db.add(EmailToken(
         user_id=user.id,
-        token_hash=token_hash,
+        token_hash=hash_code(user.id, code),
         purpose=VERIFY_PURPOSE,
-        expires_at=_now() + timedelta(hours=settings.verify_token_hours),
+        attempts=0,
+        expires_at=_now() + timedelta(minutes=settings.verify_code_minutes),
     ))
     db.commit()
-    background_tasks.add_task(send_verification_email, user.email, raw_token)
+    background_tasks.add_task(send_verification_code, user.email, code)
 
 
 # ---------- endpoints ----------
@@ -120,6 +143,9 @@ def _issue_verification(db: Session, user: User, background_tasks: BackgroundTas
 @router.post("/signup", response_model=MessageOut, status_code=status.HTTP_202_ACCEPTED)
 def signup(body: SignupRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     email = _normalise(body.email)
+    _check_email_domain(email)
+    _delete_stale_unverified(db)
+
     user = db.query(User).filter(User.email == email).first()
 
     if user is None:
@@ -131,38 +157,59 @@ def signup(body: SignupRequest, background_tasks: BackgroundTasks, db: Session =
             db.rollback()
             return MessageOut(message=SIGNUP_MESSAGE)
         db.refresh(user)
-        _issue_verification(db, user, background_tasks)
+        _issue_code(db, user, background_tasks)
+    elif not user.is_verified:
+        # Not verified yet: whoever proves they own the inbox sets the password.
+        # (Stops someone "reserving" another person's email with their own password.)
+        user.password_hash = hash_password(body.password)
+        db.commit()
+        _issue_code(db, user, background_tasks)
     else:
-        burn_password_check(body.password)   # keep timing the same as a new signup
-        if not user.is_verified:
-            _issue_verification(db, user, background_tasks)
+        burn_password_check(body.password)   # already verified: same reply, same timing
 
     return MessageOut(message=SIGNUP_MESSAGE)
 
 
 @router.post("/verify-email", response_model=UserOut)
-def verify_email(body: TokenRequest, response: Response, db: Session = Depends(get_db)):
+def verify_email(body: VerifyCodeRequest, response: Response, db: Session = Depends(get_db)):
+    code = body.code.strip().replace(" ", "")
+    if len(code) != 6 or not code.isdigit():
+        raise HTTPException(status_code=400, detail="Enter the 6-digit code from the email.")
+
+    user = db.query(User).filter(User.email == _normalise(body.email)).first()
+    if user is None or user.is_verified:
+        raise HTTPException(status_code=400, detail=INVALID_CODE)
+
     record = (
         db.query(EmailToken)
         .filter(
-            EmailToken.token_hash == hash_token(body.token),
+            EmailToken.user_id == user.id,
             EmailToken.purpose == VERIFY_PURPOSE,
             EmailToken.used_at.is_(None),
             EmailToken.expires_at > _now(),
         )
+        .order_by(EmailToken.created_at.desc())
         .first()
     )
     if record is None:
-        raise HTTPException(status_code=400, detail="This verification link is invalid or has expired.")
+        raise HTTPException(status_code=400, detail=INVALID_CODE)
+    if record.attempts >= settings.verify_max_attempts:
+        raise HTTPException(status_code=429, detail=TOO_MANY_ATTEMPTS)
 
-    user = db.get(User, record.user_id)
-    if user is None:
-        raise HTTPException(status_code=400, detail="This verification link is invalid or has expired.")
+    if not codes_match(user.id, code, record.token_hash):
+        record.attempts += 1
+        db.commit()
+        left = settings.verify_max_attempts - record.attempts
+        if left <= 0:
+            raise HTTPException(status_code=429, detail=TOO_MANY_ATTEMPTS)
+        raise HTTPException(
+            status_code=400,
+            detail=f"Incorrect code. {left} attempt{'s' if left != 1 else ''} left.",
+        )
 
     record.used_at = _now()
-    if not user.is_verified:
-        user.is_verified = True
-        user.verified_at = _now()
+    user.is_verified = True
+    user.verified_at = _now()
     db.commit()
 
     _set_session_cookie(response, user)   # verified users are logged straight in
@@ -173,7 +220,7 @@ def verify_email(body: TokenRequest, response: Response, db: Session = Depends(g
 def resend_verification(body: EmailRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == _normalise(body.email)).first()
     if user is not None and not user.is_verified:
-        _issue_verification(db, user, background_tasks)
+        _issue_code(db, user, background_tasks)
     return MessageOut(message=RESEND_MESSAGE)
 
 

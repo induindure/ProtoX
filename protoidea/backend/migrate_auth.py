@@ -1,8 +1,10 @@
 """
-One-time migration: adds user accounts + email verification to the protox database.
-Safe to run more than once (every statement uses IF NOT EXISTS).
+Migration: user accounts + email verification for ProtoX.
 
-Run from protoidea/backend:
+Our tables use a "protox_" prefix so they never collide with tables that
+generated/previewed apps create in the same database (e.g. their own "users").
+
+Safe to run more than once. Run from protoidea/backend:
     .venv\\Scripts\\python migrate_auth.py
 """
 from sqlalchemy import text
@@ -10,9 +12,9 @@ from sqlalchemy import text
 from app.db.database import engine
 
 STATEMENTS = [
-    # 1. User accounts. Passwords are stored ONLY as Argon2 hashes, never in plain text.
+    # 1. ProtoX user accounts (passwords stored only as Argon2 hashes)
     """
-    CREATE TABLE IF NOT EXISTS users (
+    CREATE TABLE IF NOT EXISTS protox_users (
         id             UUID PRIMARY KEY,
         email          TEXT NOT NULL UNIQUE,
         password_hash  TEXT NOT NULL,
@@ -22,13 +24,11 @@ STATEMENTS = [
     )
     """,
 
-    # 2. One-time tokens for email verification (and password reset later).
-    #    We store only a SHA-256 hash of the token, so even someone reading the
-    #    database cannot use a token to verify or take over an account.
+    # 2. One-time email tokens (only a SHA-256 hash of each token is stored)
     """
-    CREATE TABLE IF NOT EXISTS email_tokens (
+    CREATE TABLE IF NOT EXISTS protox_email_tokens (
         id          UUID PRIMARY KEY,
-        user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        user_id     UUID NOT NULL REFERENCES protox_users(id) ON DELETE CASCADE,
         token_hash  TEXT NOT NULL UNIQUE,
         purpose     TEXT NOT NULL,
         expires_at  TIMESTAMPTZ NOT NULL,
@@ -36,23 +36,20 @@ STATEMENTS = [
         created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
     """,
-    "CREATE INDEX IF NOT EXISTS idx_email_tokens_user ON email_tokens(user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_protox_email_tokens_user ON protox_email_tokens(user_id)",
+    "ALTER TABLE protox_email_tokens ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0",
 
-    # 3. Make sure the ideas table exists (in case it was never created locally).
+    # 3. ideas.user_id: make sure the column exists, then point it at protox_users
+    #    (the first version of this script wrongly linked it to the old "users" table)
+    "ALTER TABLE ideas ADD COLUMN IF NOT EXISTS user_id UUID",
+    "UPDATE ideas SET user_id = NULL WHERE user_id IS NOT NULL AND user_id NOT IN (SELECT id FROM protox_users)",
+    "ALTER TABLE ideas DROP CONSTRAINT IF EXISTS ideas_user_id_fkey",
+    "ALTER TABLE ideas DROP CONSTRAINT IF EXISTS ideas_user_id_protox_fkey",
     """
-    CREATE TABLE IF NOT EXISTS ideas (
-        id          UUID PRIMARY KEY,
-        session_id  TEXT NOT NULL,
-        domain      TEXT NOT NULL,
-        app_type    TEXT NOT NULL,
-        constraints TEXT,
-        ideas       JSONB NOT NULL,
-        created_at  TIMESTAMP DEFAULT NOW()
-    )
+    ALTER TABLE ideas
+        ADD CONSTRAINT ideas_user_id_protox_fkey
+        FOREIGN KEY (user_id) REFERENCES protox_users(id) ON DELETE CASCADE
     """,
-
-    # 4. Link each idea to the user who created it.
-    "ALTER TABLE ideas ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE CASCADE",
     "CREATE INDEX IF NOT EXISTS idx_ideas_user_created ON ideas(user_id, created_at DESC)",
 ]
 
@@ -62,19 +59,21 @@ def main() -> None:
         for statement in STATEMENTS:
             conn.execute(text(statement))
 
-        tables = conn.execute(text(
-            "SELECT table_name FROM information_schema.tables "
-            "WHERE table_schema = 'public' AND table_name IN ('users', 'email_tokens', 'ideas') "
-            "ORDER BY table_name"
+        cols = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'protox_users' ORDER BY ordinal_position"
         )).scalars().all()
 
-        has_user_id = conn.execute(text(
-            "SELECT 1 FROM information_schema.columns "
-            "WHERE table_name = 'ideas' AND column_name = 'user_id'"
-        )).first() is not None
+        fk_target = conn.execute(text("""
+            SELECT ccu.table_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.constraint_column_usage ccu
+              ON tc.constraint_name = ccu.constraint_name
+            WHERE tc.table_name = 'ideas' AND tc.constraint_type = 'FOREIGN KEY'
+        """)).scalars().all()
 
-    print("Tables found:", ", ".join(tables))
-    print("ideas.user_id column:", "OK" if has_user_id else "MISSING")
+    print("protox_users columns:", ", ".join(cols))
+    print("ideas.user_id points to:", ", ".join(fk_target) or "nothing")
     print("Auth migration finished.")
 
 
