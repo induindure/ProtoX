@@ -1,27 +1,30 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.db.database import Base, engine
+from app.routes.auth import router as auth_router
 from app.routes.ideas import router as ideas_router
-
-# Create all tables on startup (Supabase PostgreSQL)
-# Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="ProtoX — ProtoIdea API",
-    description="AI-powered application idea generator using LangChain + Gemini 1.5 Flash",
-    version="1.0.0",
+    description="AI-powered application idea generator",
+    version="1.1.0",
 )
 
-# Allow requests from the React frontend (Vite default port 5173)
+# Cookies are only sent to/from these exact origins (allow_credentials=True)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000", "http://localhost:5174", "http://localhost:5175", "http://localhost:5176"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:5175",
+        "http://localhost:5176",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+app.include_router(auth_router)
 app.include_router(ideas_router)
 
 
