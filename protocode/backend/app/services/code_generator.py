@@ -226,6 +226,16 @@ Authentication contract (every stack, exactly this):
 Frontend robustness:
 - Every page that loads data handles loading, error and empty states.
   Treat a missing list as [] (e.g. (data ?? []).length), never assume data exists.
+
+DEPLOYMENT RULES (mandatory):
+1. Project layout: /frontend (Vite) and /backend only.
+2. Frontend must call the API using import.meta.env.VITE_API_URL (never hardcode localhost).
+3. React Router: <BrowserRouter basename={import.meta.env.BASE_URL}>.
+   Vue Router: createWebHistory(import.meta.env.BASE_URL).
+4. FastAPI: read CORS_ORIGINS env var (comma-separated) for CORSMiddleware allow_origins.
+5. Django: use env vars SECRET_KEY, DEBUG, ALLOWED_HOSTS, CORS_ORIGINS;
+   use django-cors-headers, whitenoise, gunicorn; STATIC_ROOT = BASE_DIR / "staticfiles".
+6. backend/requirements.txt must list every dependency (including gunicorn/uvicorn).
 """
 
 def fix_react_package_json(files: list[dict]) -> list[dict]:
