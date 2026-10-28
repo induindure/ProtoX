@@ -1,7 +1,12 @@
-fastapi
-uvicorn
-python-dotenv
-langchain-groq
-langchain-core
-pydantic
-pyflakes
+fastapi==0.143.0
+uvicorn==0.54.0
+pydantic==2.14.0
+python-dotenv==1.2.4
+
+# AI (Groq, with Gemini fallback)
+langchain-core==1.7.1
+langchain-groq==1.1.3
+langchain-google-genai==4.4.2
+
+# Static checks on generated code
+pyflakes==4.0.3
