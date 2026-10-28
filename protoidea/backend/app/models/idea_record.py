@@ -11,6 +11,8 @@ class IdeaRecord(Base):
     __tablename__ = "ideas"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), nullable=True, index=True)
+    
     session_id = Column(String, nullable=False, index=True)
     domain = Column(String, nullable=False)
     app_type = Column(String, nullable=False)
