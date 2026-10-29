@@ -106,6 +106,14 @@ def _detect_frontend_run_command(
         except Exception:
             pass
 
+    try:
+        _pkg = json.loads(pkg_file.read_text(encoding="utf-8"))
+    except Exception:
+        _pkg = {}
+    _deps = {**_pkg.get("dependencies", {}), **_pkg.get("devDependencies", {})}
+    if "vite" in _deps and "next" not in _deps:
+        frontend = "React"
+
     # Next.js
     if frontend == "Next.js":
 
