@@ -1,18 +1,21 @@
 """
 proto_idea.py — ProtoIdea Agentic Pipeline
-Replaces single LangChain LLM call with a multi-step agent loop:
+Multi-step agent loop:
   Step 1 — PLAN    : Understand the domain and decide generation strategy
-  Step 2 — GENERATE: Call Groq LLM to produce raw ideas
+  Step 2 — GENERATE: Call the LLM to produce raw ideas
   Step 3 — REFLECT : Validate ideas for quality, diversity, and completeness
   Step 4 — REFINE  : If reflection fails, regenerate with targeted feedback
   Step 5 — PARSE   : Return clean IdeaModel objects for scorer
-No LangChain. Pure Groq API + custom agent logic.
+Groq is tried first; if a call fails (rate limit, request too large, etc.)
+the same call is retried on Gemini automatically.
 """
 
 import json
 import re
 from typing import List, Optional
+
 from groq import AsyncGroq
+from openai import AsyncOpenAI
 
 from app.config import settings
 from app.models.schemas import IdeaModel
@@ -21,6 +24,8 @@ from app.models.schemas import IdeaModel
 # ── Constants ────────────────────────────────────────────────────────────────
 
 MODEL = "openai/gpt-oss-120b"
+GEMINI_MODEL = "gemini-3-flash-preview"
+GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 MAX_RETRIES = 2  # how many times agent will try to refine before giving up
 
 
@@ -83,10 +88,33 @@ Make specific improvements based on feedback. Be concise and practical.
 No markdown. No explanation. Just the JSON object."""
 
 
-# ── Groq Client ──────────────────────────────────────────────────────────────
+# ── LLM Client + Groq → Gemini fallback ──────────────────────────────────────
 
 def _get_client() -> AsyncGroq:
     return AsyncGroq(api_key=settings.groq_api_key)
+
+
+async def _chat(client: AsyncGroq, messages: list, temperature: float) -> str:
+    """Try Groq first; on any error, retry the same call once on Gemini."""
+    try:
+        r = await client.chat.completions.create(
+            model=MODEL,
+            temperature=temperature,
+            messages=messages,
+        )
+        return (r.choices[0].message.content or "").strip()
+    except Exception as e:
+        key = getattr(settings, "gemini_api_key", "")
+        if not key:
+            raise
+        print(f"[agent] Groq failed ({type(e).__name__}: {e}) -> falling back to Gemini", flush=True)
+        g = AsyncOpenAI(api_key=key, base_url=GEMINI_BASE_URL)
+        r = await g.chat.completions.create(
+            model=GEMINI_MODEL,
+            temperature=temperature,
+            messages=messages,
+        )
+        return (r.choices[0].message.content or "").strip()
 
 
 # ── Agent Steps ──────────────────────────────────────────────────────────────
@@ -94,23 +122,17 @@ def _get_client() -> AsyncGroq:
 async def _plan(client: AsyncGroq, domain: str, app_type: str, constraints: str) -> str:
     """Step 1 — PLAN: Generate a strategy before jumping into ideas."""
     try:
-        response = await client.chat.completions.create(
-            model=MODEL,
-            temperature=0.4,  # low temp — we want focused strategic thinking
-            messages=[
-                {"role": "system", "content": PLANNER_SYSTEM},
-                {"role": "user", "content": (
-                    f"Domain: {domain}\n"
-                    f"App Type: {app_type}\n"
-                    f"Constraints: {constraints or 'None'}\n\n"
-                    "What strategy should guide idea generation here?"
-                )}
-            ]
-        )
-        strategy = response.choices[0].message.content.strip()
-        return strategy
+        return await _chat(client, [
+            {"role": "system", "content": PLANNER_SYSTEM},
+            {"role": "user", "content": (
+                f"Domain: {domain}\n"
+                f"App Type: {app_type}\n"
+                f"Constraints: {constraints or 'None'}\n\n"
+                "What strategy should guide idea generation here?"
+            )},
+        ], 0.4)  # low temp — we want focused strategic thinking
     except Exception as e:
-        print(f"[agent] Plan failed (likely invalid API key): {e}")
+        print(f"[agent] Plan failed: {type(e).__name__}: {e}")
         return f"Generate ideas for {domain} {app_type} focusing on innovation and user needs."
 
 
@@ -147,28 +169,18 @@ async def _generate(
             "Generate the ideas now."
         )
 
-    response = await client.chat.completions.create(
-        model=MODEL,
-        temperature=0.8,  # higher temp — we want creative ideas
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user_content},
-        ]
-    )
-    return response.choices[0].message.content.strip()
+    return await _chat(client, [
+        {"role": "system", "content": system},
+        {"role": "user", "content": user_content},
+    ], 0.8)  # higher temp — we want creative ideas
 
 
 async def _reflect(client: AsyncGroq, raw_ideas: str) -> dict:
     """Step 3 — REFLECT: Ask LLM to validate its own output."""
-    response = await client.chat.completions.create(
-        model=MODEL,
-        temperature=0.1,  # very low temp — we want consistent, critical evaluation
-        messages=[
-            {"role": "system", "content": REFLECTOR_SYSTEM},
-            {"role": "user", "content": f"Review these ideas:\n{raw_ideas}"}
-        ]
-    )
-    raw = response.choices[0].message.content.strip()
+    raw = await _chat(client, [
+        {"role": "system", "content": REFLECTOR_SYSTEM},
+        {"role": "user", "content": f"Review these ideas:\n{raw_ideas}"},
+    ], 0.1)  # very low temp — consistent, critical evaluation
     cleaned = re.sub(r"```(?:json)?", "", raw).strip().rstrip("`").strip()
     try:
         return json.loads(cleaned)
@@ -177,7 +189,7 @@ async def _reflect(client: AsyncGroq, raw_ideas: str) -> dict:
         return {"passed": True, "issues": [], "feedback": ""}
 
 
-# ── Demo Ideas Fallback (when API keys are invalid) ────────────────────────
+# ── Demo Ideas Fallback (only when every LLM call fails) ─────────────────────
 
 DEMO_IDEAS = {
     "healthcare": [
@@ -253,7 +265,7 @@ DEMO_IDEAS = {
 
 
 def _get_demo_ideas(domain: str) -> List[IdeaModel]:
-    """Return demo ideas for the given domain when API keys are invalid."""
+    """Return demo ideas for the given domain when all LLM calls fail."""
     domain_lower = domain.lower()
     demo_set = DEMO_IDEAS.get(domain_lower, DEMO_IDEAS["education"])
     return [IdeaModel(**idea) for idea in demo_set]
@@ -284,7 +296,7 @@ def _parse_ideas(raw: str) -> List[IdeaModel]:
 class ProtoIdeaAgent:
     """
     Multi-step agentic pipeline for idea generation.
-    
+
     Loop:
       PLAN → GENERATE → REFLECT → (REFINE if needed, up to MAX_RETRIES) → PARSE
     """
@@ -293,14 +305,13 @@ class ProtoIdeaAgent:
         try:
             client = _get_client()
 
-            # ── Step 1: PLAN ──────────────────────────────────────────────────────
+            # ── Step 1: PLAN ──────────────────────────────────────────────────
             strategy = await _plan(client, domain, app_type, constraints)
 
-            # ── Step 2: GENERATE ──────────────────────────────────────────────────
+            # ── Step 2: GENERATE ──────────────────────────────────────────────
             raw_ideas = await _generate(client, domain, app_type, constraints, strategy)
 
-            # ── Step 3 + 4: REFLECT → REFINE loop ────────────────────────────────
-            feedback = None
+            # ── Step 3 + 4: REFLECT → REFINE loop ─────────────────────────────
             for attempt in range(MAX_RETRIES):
                 reflection = await _reflect(client, raw_ideas)
 
@@ -312,7 +323,7 @@ class ProtoIdeaAgent:
                 print(f"[agent] Reflection attempt {attempt + 1} failed. Issues: {issues}")
                 print(f"[agent] Refining with feedback: {feedback}")
 
-                # ── Step 4: REFINE ────────────────────────────────────────────────
+                # ── Step 4: REFINE ────────────────────────────────────────────
                 raw_ideas = await _generate(
                     client, domain, app_type, constraints,
                     strategy=strategy,
@@ -320,10 +331,10 @@ class ProtoIdeaAgent:
                     previous_ideas_raw=raw_ideas,
                 )
 
-            # ── Step 5: PARSE ─────────────────────────────────────────────────────
+            # ── Step 5: PARSE ─────────────────────────────────────────────────
             return _parse_ideas(raw_ideas)
         except Exception as e:
-            print(f"[agent] Generation failed (likely invalid API key): {e}")
+            print(f"[agent] Generation failed: {type(e).__name__}: {e}")
             print(f"[agent] Falling back to demo ideas for domain: {domain}")
             return _get_demo_ideas(domain)
 
@@ -342,7 +353,7 @@ class ProtoIdeaAgent:
         """
         try:
             client = _get_client()
-            
+
             user_content = (
                 f"Current idea:\n"
                 f"  Title: {title}\n"
@@ -353,19 +364,13 @@ class ProtoIdeaAgent:
                 f"User feedback: {feedback}\n\n"
                 "Please refine this idea based on the feedback."
             )
-            
-            response = await client.chat.completions.create(
-                model=MODEL,
-                temperature=0.7,
-                messages=[
-                    {"role": "system", "content": IDEA_REFINER_SYSTEM},
-                    {"role": "user", "content": user_content},
-                ]
-            )
-            
-            raw = response.choices[0].message.content.strip()
+
+            raw = await _chat(client, [
+                {"role": "system", "content": IDEA_REFINER_SYSTEM},
+                {"role": "user", "content": user_content},
+            ], 0.7)
             cleaned = re.sub(r"```(?:json)?", "", raw).strip().rstrip("`").strip()
-            
+
             try:
                 data = json.loads(cleaned)
                 return IdeaModel(**data)
@@ -379,7 +384,7 @@ class ProtoIdeaAgent:
                     target_users=target_users,
                 )
         except Exception as e:
-            print(f"[agent] Refinement failed: {e}")
+            print(f"[agent] Refinement failed: {type(e).__name__}: {e}")
             # Fallback: return original idea
             return IdeaModel(
                 title=title,

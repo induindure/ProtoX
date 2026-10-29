@@ -38,6 +38,7 @@ from app.services.attribute_fixer import fix_module_attributes
 from app.services.vue_fixer import fix_vue_react_libs, fix_vue_jsx
 from app.services.llm_provider import get_llm, message_text
 from app.services.bad_import_fixer import fix_nonexistent_imports
+import json_repair
 
 load_dotenv()
 
@@ -238,6 +239,18 @@ DEPLOYMENT RULES (mandatory):
 6. backend/requirements.txt must list every dependency (including gunicorn/uvicorn).
 """
 
+def _text(response) -> str:
+    content = response.content
+    if isinstance(content, str):
+        return content
+    parts = []
+    for part in content:
+        if isinstance(part, str):
+            parts.append(part)
+        elif isinstance(part, dict) and part.get("type") == "text":
+            parts.append(part.get("text", ""))
+    return "".join(parts)
+
 def fix_react_package_json(files: list[dict]) -> list[dict]:
     """
     Deterministically fixes React package.json files.
@@ -332,34 +345,22 @@ async def generate_code(
         parsed = json.loads(raw)
 
     except json.JSONDecodeError:
-
-        repair_messages = [
-            SystemMessage(
-                content=(
-                    "You output broken JSON. "
-                    "Return ONLY the corrected, valid JSON — "
-                    "no markdown, no explanation."
-                )
-            ),
-            HumanMessage(content=raw),
-        ]
-
-        repair_response = await llm.ainvoke(
-            repair_messages
-        )
-
-        repaired = repair_response.content.strip()
-
-        if repaired.startswith("```"):
-            repaired = repaired.split("```")[1]
-
-            if repaired.startswith("json"):
-                repaired = repaired[4:]
-
-        parsed = json.loads(
-            repaired.strip()
-        )
-
+        try:
+            parsed = json_repair.loads(raw)
+            if not isinstance(parsed, dict) or "files" not in parsed:
+                raise ValueError("repair produced unusable output")
+        except Exception:
+            # last resort: ask the LLM to fix it
+            repair_response = await llm.ainvoke([
+                SystemMessage(content="You output broken JSON. Return ONLY the corrected, valid JSON, no markdown, no explanation."),
+                HumanMessage(content=raw),
+            ])
+            repaired = message_text(repair_response).strip()
+            if repaired.startswith("```"):
+                repaired = repaired.split("```")[1]
+                if repaired.startswith("json"):
+                    repaired = repaired[4:]
+            parsed = json.loads(repaired.strip())
     print(
         "PARSED KEYS:",
         list(parsed.keys())

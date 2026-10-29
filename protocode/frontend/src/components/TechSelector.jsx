@@ -4,11 +4,7 @@ const STACKS = [
     label: 'React + FastAPI',
     tagline: 'Fast & modern - great for apps that need quick responses',
   },
-  {
-    value: 'React + Node/Express',
-    label: 'React + Node/Express',
-    tagline: 'Most popular combo - huge community, easy to find help',
-  },
+
   {
     value: 'React + Django',
     label: 'React + Django',
@@ -18,21 +14,6 @@ const STACKS = [
     value: 'Vue + FastAPI',
     label: 'Vue + FastAPI',
     tagline: 'Simple & beginner-friendly frontend with a speedy backend',
-  },
-  {
-    value: 'Vue + Node/Express',
-    label: 'Vue + Node/Express',
-    tagline: 'Easy to learn, good for straightforward web apps',
-  },
-  {
-    value: 'Next.js + FastAPI',
-    label: 'Next.js + FastAPI',
-    tagline: 'Great for public websites that need to load fast on Google',
-  },
-  {
-    value: 'Next.js + Node/Express',
-    label: 'Next.js + Node/Express',
-    tagline: 'Best choice if you want your app to go live & scale big',
   },
 ]
 

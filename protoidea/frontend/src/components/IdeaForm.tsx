@@ -6,7 +6,7 @@ interface Props {
   loading: boolean
 }
 
-const APP_TYPES = ['Web App', 'Mobile App', 'CLI Tool', 'API / Backend Service', 'Desktop App', 'Browser Extension']
+const APP_TYPES = ['Web App', 'Mobile App']
 const DOMAINS = ['Healthcare', 'Education', 'Finance', 'E-Commerce', 'Social Media', 'Productivity', 'Entertainment', 'Travel', 'Food & Nutrition', 'Other']
 
 export default function IdeaForm({ onSubmit, loading }: Props) {
