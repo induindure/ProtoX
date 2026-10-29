@@ -3,7 +3,7 @@ from pathlib import Path
 import requests
 from .detector import detect_stack
 from .templates import PAGES_WORKFLOW, GITIGNORE, render_yaml
-from .patch import patch_router_basename
+from .patch import patch_router_basename, patch_requirements, patch_vue_config
 
 GH = "https://api.github.com"
 
@@ -27,13 +27,14 @@ def deploy_to_github(project_dir: Path, token: str, repo_name: str) -> dict:
     owner = me.json()["login"]
 
     # 1. Copy project (never copy node_modules / .git)
-        # 1. Copy project (never copy node_modules / .git)
     work = Path(tempfile.mkdtemp()) / "app"
     shutil.copytree(project_dir, work, ignore=shutil.ignore_patterns(
         "node_modules", ".git", "venv", ".venv", "__pycache__", "dist"))
 
-    # 1b. Patch router so the app works under /<repo>/ on GitHub Pages
+    # 1b. Patch the copy so it works on GitHub Pages / Render
     patched = patch_router_basename(work)
+    patched += patch_requirements(work)
+    patched += patch_vue_config(work)
 
     # 2. Create repo (retry with suffix if name is taken)
     for _ in range(3):
