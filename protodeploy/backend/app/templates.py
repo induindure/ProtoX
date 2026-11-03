@@ -45,6 +45,8 @@ jobs:
 GITIGNORE = """node_modules/
 dist/
 .env
+.env.*
+!.env.example
 .venv/
 venv/
 __pycache__/
@@ -56,10 +58,13 @@ staticfiles/
 
 def render_yaml(stack: dict, api_name: str, owner: str) -> str:
     cors = f"https://{owner}.github.io"
+    db_name = f"{api_name[:50]}-db"
     if stack["backend"] == "fastapi":
         build = "pip install -r requirements.txt"
         start = f"uvicorn {stack['entry']} --host 0.0.0.0 --port $PORT"
-        extra = ""
+        extra = """      - key: SECRET_KEY
+        generateValue: true
+"""
     else:
         build = ("pip install -r requirements.txt && "
                  "python manage.py collectstatic --noinput && "
@@ -72,7 +77,11 @@ def render_yaml(stack: dict, api_name: str, owner: str) -> str:
       - key: ALLOWED_HOSTS
         value: .onrender.com
 """
-    return f"""services:
+    return f"""databases:
+  - name: {db_name}
+    plan: free
+
+services:
   - type: web
     name: {api_name}
     runtime: python
@@ -85,4 +94,8 @@ def render_yaml(stack: dict, api_name: str, owner: str) -> str:
         value: 3.11.9
       - key: CORS_ORIGINS
         value: {cors}
+      - key: DATABASE_URL
+        fromDatabase:
+          name: {db_name}
+          property: connectionString
 {extra}"""

@@ -65,6 +65,26 @@ export default function App() {
     }
   }
 
+  const handleSendToDeploy = async () => {
+    try {
+      const response = await fetch('http://localhost:8010/api/protodeploy/store-project', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          files: project.files,
+          project_name: project.project_name,
+          tech_stack: project.tech_stack,
+        }),
+      })
+      if (!response.ok) throw new Error()
+      const data = await response.json()
+      const name = encodeURIComponent(project.project_name)
+      window.open(`http://localhost:5180/?id=${data.project_id}&name=${name}`, '_blank')
+    } catch {
+      setError('Could not send project to ProtoDeploy. Is its backend running on port 8010?')
+    }
+  }
+
   const handleAutoFix = async () => {
     if (!project) return
     setAutoFixing(true)
@@ -203,27 +223,51 @@ export default function App() {
           </button>
 
           {testsPassed && (
-          <button
-            onClick={handleSendToPreview}
-            disabled={!project}
-            style={{
-              padding: '0.5rem 1.4rem',
-              background: '#2563eb',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '6px',
-              fontWeight: 700,
-              fontSize: '0.85rem',
-              cursor: project ? 'pointer' : 'not-allowed',
-              opacity: project ? 1 : 0.5,
-              letterSpacing: '0.03em',
-              transition: 'background 0.2s',
-            }}
-            onMouseOver={e => { if (project) e.target.style.background = '#1d4ed8' }}
-            onMouseOut={e => { e.target.style.background = '#2563eb' }}
-          >
-            Preview App →
-          </button>
+            <>
+              <button
+                onClick={handleSendToPreview}
+                disabled={!project}
+                style={{
+                  padding: '0.5rem 1.4rem',
+                  background: '#2563eb',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontWeight: 700,
+                  fontSize: '0.85rem',
+                  cursor: project ? 'pointer' : 'not-allowed',
+                  opacity: project ? 1 : 0.5,
+                  letterSpacing: '0.03em',
+                  transition: 'background 0.2s',
+                }}
+                onMouseOver={e => { if (project) e.target.style.background = '#1d4ed8' }}
+                onMouseOut={e => { e.target.style.background = '#2563eb' }}
+              >
+                Preview App →
+              </button>
+
+              <button
+                onClick={handleSendToDeploy}
+                disabled={!project}
+                style={{
+                  padding: '0.5rem 1.4rem',
+                  background: '#16a34a',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontWeight: 700,
+                  fontSize: '0.85rem',
+                  cursor: project ? 'pointer' : 'not-allowed',
+                  opacity: project ? 1 : 0.5,
+                  letterSpacing: '0.03em',
+                  transition: 'background 0.2s',
+                }}
+                onMouseOver={e => { if (project) e.target.style.background = '#15803d' }}
+                onMouseOut={e => { e.target.style.background = '#16a34a' }}
+              >
+                Deploy →
+              </button>
+            </>
           )}
 
           {hasFailures && (

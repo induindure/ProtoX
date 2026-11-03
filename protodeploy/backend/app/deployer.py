@@ -3,8 +3,7 @@ from pathlib import Path
 import requests
 from .detector import detect_stack
 from .templates import PAGES_WORKFLOW, GITIGNORE, render_yaml
-from .patch import patch_router_basename, patch_requirements, patch_vue_config
-
+from .patch import (patch_router_basename, patch_requirements, patch_vue_config,patch_secrets, patch_django_migrations, detect_api_base)
 GH = "https://api.github.com"
 
 def _h(token: str) -> dict:
@@ -35,6 +34,8 @@ def deploy_to_github(project_dir: Path, token: str, repo_name: str) -> dict:
     patched = patch_router_basename(work)
     patched += patch_requirements(work)
     patched += patch_vue_config(work)
+    patched += patch_secrets(work)
+    patched += patch_django_migrations(work)
 
     # 2. Create repo (retry with suffix if name is taken)
     for _ in range(3):
@@ -57,8 +58,9 @@ def deploy_to_github(project_dir: Path, token: str, repo_name: str) -> dict:
 
     wf = work / ".github" / "workflows"
     wf.mkdir(parents=True, exist_ok=True)
+    api_base = detect_api_base(work)
     (wf / "deploy-frontend.yml").write_text(
-        PAGES_WORKFLOW.replace("__REPO__", repo).replace("__API_URL__", api_url))
+        PAGES_WORKFLOW.replace("__REPO__", repo).replace("__API_URL__", api_url + api_base))
     (work / "render.yaml").write_text(render_yaml(stack, api_name, owner))
     (work / ".gitignore").write_text(GITIGNORE)
 

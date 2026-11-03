@@ -3,13 +3,15 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.router import router
-
 load_dotenv()
 
-app = FastAPI(title="ProtoDeploy")
+from app.router import router
+from app.projects import router as projects_router
+
+app = FastAPI(title="ProtoDeploy API")
 
 origins = [o.strip() for o in os.getenv("FRONTEND_ORIGINS", "").split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -18,6 +20,7 @@ app.add_middleware(
 )
 
 app.include_router(router)
+app.include_router(projects_router)
 
 
 @app.get("/health")

@@ -48,9 +48,10 @@ def message_text(response) -> str:
             parts.append(part.get("text", ""))
     return "".join(parts)
 
-
 def complete(system_prompt: str, user_prompt: str, max_tokens: int = 8000) -> str:
     """Ask the AI with a system + user prompt; returns plain text."""
+    est_input = (len(system_prompt) + len(user_prompt)) // 3
+    print(f"LLM CALL: est_input~{est_input} tokens, max_tokens={max_tokens}", flush=True)
     llm = get_llm(max_tokens=max_tokens)
     response = llm.invoke([
         SystemMessage(content=system_prompt),

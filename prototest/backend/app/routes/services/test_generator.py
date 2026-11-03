@@ -11,6 +11,7 @@ import re
 from app.routes.services.llm_utils import strip_code_fences
 import asyncio
 from app.routes.services.llm_provider import complete
+import ast
 
 load_dotenv()
 
@@ -108,6 +109,36 @@ def _strip_backend_prefix(code: str) -> str:
     code = re.sub(r'\bimport backend\.', 'import ', code)
     return code
 
+def _clean_pytest_output(code: str) -> str:
+    """Remove echoed prompt text, repeated copies, and a truncated tail."""
+    # echoed instructions
+    code = code.split("[instruction]")[0]
+
+    # model repeated the whole file: keep the first copy only
+    lines = code.split("\n")
+    starts = [i for i, l in enumerate(lines) if l.startswith("import pytest")]
+    if len(starts) > 1:
+        lines = lines[:starts[1]]
+    code = "\n".join(lines).rstrip() + "\n"
+
+    try:
+        ast.parse(code)
+        return code
+    except SyntaxError:
+        pass
+
+    # still broken (probably cut off): drop trailing incomplete tests
+    lines = code.split("\n")
+    cuts = [i for i, l in enumerate(lines) if l.startswith(("@pytest", "def ", "class "))]
+    for c in reversed(cuts):
+        trial = "\n".join(lines[:c]).rstrip() + "\n"
+        try:
+            ast.parse(trial)
+            return trial
+        except SyntaxError:
+            continue
+    return code
+
 async def generate_test_file(files: list, runner: str) -> str:
     """
     files: request.files (list of objects with .path and .content)
@@ -132,10 +163,12 @@ async def generate_test_file(files: list, runner: str) -> str:
     )
 
     raw = (await asyncio.to_thread(
-        complete, system_prompt, user_prompt, 8000
+        complete, system_prompt, user_prompt, 4000
     )).strip()
 
     raw = strip_code_fences(raw)
+    if runner == "pytest":
+        raw = _clean_pytest_output(raw)
 
     if runner == "jest":
         raw = _strip_env_overrides(raw)
