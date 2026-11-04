@@ -12,6 +12,9 @@ export default function App() {
   const [autoFixing, setAutoFixing] = useState(false)
   const [fixHistory, setFixHistory] = useState(null)
   const [error, setError] = useState('')
+  const [fixPrompt, setFixPrompt] = useState('')
+  const [promptLoading, setPromptLoading] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -112,6 +115,43 @@ export default function App() {
     } finally {
       setAutoFixing(false)
     }
+  }
+
+  const handleFixPrompt = async () => {
+    if (!project || !report) return
+    setPromptLoading(true)
+    setFixPrompt('')
+    try {
+      const ex = report.test_execution || {}
+      const syntaxErrors = (report.syntax_results || [])
+        .filter(r => r.syntax.status === 'fail')
+        .map(r => `${r.path}: ${r.syntax.message}`)
+        .join('\n')
+      const output = [ex.stdout, ex.stderr, syntaxErrors].filter(Boolean).join('\n')
+
+      const res = await fetch('http://localhost:8002/api/fix-prompt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          files: project.files,
+          output,
+          test_code: ex.generated_test_code || '',
+        }),
+      })
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      setFixPrompt(data.prompt)
+    } catch {
+      setError('Could not create the fix prompt.')
+    } finally {
+      setPromptLoading(false)
+    }
+  }
+
+  const handleCopyPrompt = async () => {
+    await navigator.clipboard.writeText(fixPrompt)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
   const hasFailures = report && (
@@ -290,7 +330,52 @@ export default function App() {
               {autoFixing ? 'Fixing & Retesting...' : 'Auto-Fix & Retest'}
             </button>
           )}
+          {hasFailures && (
+            <button
+              onClick={handleFixPrompt}
+              disabled={promptLoading || !project}
+              style={{
+                alignSelf: 'flex-start',
+                padding: '0.65rem 1.4rem',
+                background: promptLoading ? '#ccc' : '#7c3aed',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '6px',
+                fontWeight: 700,
+                fontSize: '0.9rem',
+                cursor: promptLoading ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {promptLoading ? 'Writing prompt...' : 'Get fix prompt for ProtoCode'}
+            </button>
+          )}
         </div>
+        {fixPrompt && (
+          <div style={{
+            border: '1px solid var(--border)',
+            borderRadius: '8px',
+            padding: '1rem',
+            background: 'var(--surface)',
+          }}>
+            <textarea
+              readOnly
+              value={fixPrompt}
+              rows={6}
+              style={{ width: '100%', fontSize: '0.88rem', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--border)' }}
+            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '0.6rem' }}>
+              <button
+                onClick={handleCopyPrompt}
+                style={{ padding: '0.45rem 1.1rem', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 700, cursor: 'pointer' }}
+              >
+                {copied ? 'Copied' : 'Copy prompt'}
+              </button>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                Paste into the ProtoCode chat, then click Send to ProtoTest again.
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Results */}

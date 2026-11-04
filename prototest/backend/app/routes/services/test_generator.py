@@ -142,6 +142,69 @@ def _clean_pytest_output(code: str) -> str:
             continue
     return code
 
+_AUTO_IMPORTS = {
+    "uuid": "import uuid",
+    "json": "import json",
+    "random": "import random",
+    "string": "import string",
+    "os": "import os",
+    "re": "import re",
+    "time": "import time",
+    "secrets": "import secrets",
+    "base64": "import base64",
+    "hashlib": "import hashlib",
+    "math": "import math",
+}
+
+def ensure_stdlib_imports(code: str) -> str:
+    """Adds missing 'import uuid' style lines for stdlib modules the test uses
+    but never imported. Leaves the code untouched if it can't be parsed."""
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return code
+
+    defined, used = set(), set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for a in node.names:
+                defined.add((a.asname or a.name).split(".")[0])
+        elif isinstance(node, ast.ImportFrom):
+            for a in node.names:
+                defined.add(a.asname or a.name)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            defined.add(node.name)
+        elif isinstance(node, ast.arg):
+            defined.add(node.arg)
+        elif isinstance(node, ast.Name):
+            (defined if isinstance(node.ctx, ast.Store) else used).add(node.id)
+
+    missing = sorted(n for n in used if n in _AUTO_IMPORTS and n not in defined)
+    if not missing:
+        return code
+    return "\n".join(_AUTO_IMPORTS[n] for n in missing) + "\n" + code
+
+def fix_known_import_mistakes(code: str) -> str:
+    """Moves StaticPool to sqlalchemy.pool when the model imports it from sqlalchemy.orm."""
+    if "StaticPool" not in code:
+        return code
+
+    def repl(m):
+        names = [n.strip() for n in m.group(1).split(",") if n.strip()]
+        moved = [n for n in names if n.split()[0] == "StaticPool"]
+        keep = [n for n in names if n.split()[0] != "StaticPool"]
+        if not moved:
+            return m.group(0)
+        lines = []
+        if keep:
+            lines.append("from sqlalchemy.orm import " + ", ".join(keep))
+        lines.append("from sqlalchemy.pool import " + ", ".join(moved))
+        return "\n".join(lines)
+
+    return re.sub(
+        r"^from sqlalchemy\.orm import ([^\n(]+)$", repl, code, flags=re.MULTILINE
+    )
+
 async def generate_test_file(files: list, runner: str) -> str:
     """
     files: request.files (list of objects with .path and .content)
@@ -188,6 +251,7 @@ async def generate_test_file(files: list, runner: str) -> str:
     raw = strip_code_fences(raw)
     if runner == "pytest":
         raw = _clean_pytest_output(raw)
+        raw = fix_known_import_mistakes(ensure_stdlib_imports(raw))
 
     if runner == "jest":
         raw = _strip_env_overrides(raw)

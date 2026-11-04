@@ -11,11 +11,11 @@ from app.routes.services.llm_provider import complete
 from app.routes.services.llm_utils import strip_code_fences
 
 from app.routes.services.llm_utils import strip_code_fences
-from app.routes.services.test_generator import _is_backend_file
 
 import asyncio
 import urllib.request
 from app.routes.services.llm_provider import complete
+from app.routes.services.test_generator import _is_backend_file, ensure_stdlib_imports, fix_known_import_mistakes
 
 load_dotenv()
 
@@ -73,7 +73,11 @@ async def fix_test_failure(files: list, stdout: str, stderr: str, test_code: str
     mentioned = [p for p in paths if p in output or p.replace("/", "\\") in output]
     key = [
         p for p in paths
-        if p not in mentioned and p.rsplit("/", 1)[-1] in _KEY_FILES
+        if p not in mentioned and (
+            p.rsplit("/", 1)[-1] in _KEY_FILES
+            or "/routers/" in p
+            or "/routes/" in p
+        )
     ]
     selected, budget = [], 150_000
     for p in mentioned + key:
@@ -114,7 +118,7 @@ async def fix_wrong_test(files: list, output: str, test_code: str) -> str | None
     field names/types. Returns the new test code, or None."""
     schema_files = [
         f for f in files
-        if any(k in f.path.lower() for k in ("schema", "model"))
+        if any(k in f.path.lower() for k in ("schema", "model", "database", "depend"))
     ]
     context = "\n\n".join(f"--- {f.path} ---\n{f.content}" for f in schema_files)[:9000]
 
@@ -136,4 +140,4 @@ async def fix_wrong_test(files: list, output: str, test_code: str) -> str | None
         print(f"[auto-fix] test repair failed: {e}")
         return None
     code = strip_code_fences(out.strip())
-    return code if "def test_" in code else None
+    return fix_known_import_mistakes(ensure_stdlib_imports(code)) if "def test_" in code else None

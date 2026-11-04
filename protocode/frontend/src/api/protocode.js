@@ -10,3 +10,12 @@ export const generateCode = async (idea, techStack, databaseUrl) => {
   })
   return response.data
 }
+
+export const chatEdit = async (instruction, files, techStack) => {
+  const response = await axios.post(`${BASE_URL}/chat-edit`, {
+    instruction,
+    files,
+    tech_stack: techStack || '',
+  })
+  return response.data // { explanation, files: [{ path, content }] }
+}

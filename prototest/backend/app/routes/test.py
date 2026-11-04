@@ -9,6 +9,9 @@ from app.routes.services.project_builder import build_project_dir
 from app.routes.services.test_generator import generate_test_file
 from app.routes.services.test_executor import run_pytest, run_jest, cleanup
 from app.routes.services.code_fixer import fix_syntax_error, fix_test_failure, fix_wrong_test
+import asyncio
+from fastapi import HTTPException
+from app.routes.services.llm_provider import complete
 
 router = APIRouter()
 
@@ -118,6 +121,7 @@ async def auto_fix(request: TestRequest):
     success = False
 
     test_code = None
+    test_repair_used = False
     for attempt in range(1, MAX_AUTO_FIX_ATTEMPTS + 1):
         syntax_results = [
             {"path": path, "syntax": check_syntax(path, content)}
@@ -184,9 +188,16 @@ async def auto_fix(request: TestRequest):
 
         out_text = execution.get("stdout", "") + "\n" + execution.get("stderr", "")
         new_test = None
-        if runner == "pytest" and ("422" in out_text or "KeyError" in out_text):
+        test_side_failure = (
+            "422" in out_text
+            or "KeyError" in out_text
+            or "NameError" in out_text
+            or "ERROR collecting test_generated.py" in out_text
+        )
+        if runner == "pytest" and test_side_failure and not test_repair_used:
             new_test = await fix_wrong_test(file_inputs, out_text, test_code)
         if new_test:
+            test_repair_used = True
             test_code = new_test        # retry with the repaired test
             iteration["fixed_files"] = ["(test file)"]
             continue
@@ -219,3 +230,41 @@ async def auto_fix(request: TestRequest):
         "final_test_execution": final_execution,
         "files": [{"path": p, "content": c} for p, c in files.items()],
     }
+
+class FixPromptRequest(BaseModel):
+    files: List[FileInput]
+    output: str
+    test_code: str = ""
+
+
+@router.post("/fix-prompt")
+async def fix_prompt(request: FixPromptRequest):
+    keys = ("schema", "model", "route", "router", "main", "view", "serializer")
+    picked, budget = [], 6000
+    for f in request.files:
+        p = f.path.replace("\\", "/").lower()
+        if "backend/" in p and any(k in p for k in keys):
+            if len(f.content) > budget:
+                continue
+            budget -= len(f.content)
+            picked.append(f"--- {f.path} ---\n{f.content}")
+
+    system = (
+        "You write instructions for an AI code editor. You are given failing test output "
+        "and the backend code. Write ONE short instruction (max 120 words) that the user "
+        "can paste into the editor, telling it what to change in the APPLICATION code. "
+        "Name the exact files, routes, fields or functions, and describe the behaviour "
+        "that is expected. If the failure is caused by the test sending wrong field names "
+        "or types and not by an app bug, start with 'TEST ISSUE:' and explain in one "
+        "sentence instead. Plain text only."
+    )
+    user = (
+        f"Failure output:\n{request.output[-2500:]}\n\n"
+        f"Backend code:\n{chr(10).join(picked)}\n\n"
+        f"Test file (excerpt):\n{request.test_code[:1500]}"
+    )
+    try:
+        text = await asyncio.to_thread(complete, system, user, 1200)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"prompt": text.strip()}

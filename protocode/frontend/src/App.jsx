@@ -4,18 +4,21 @@ import TechSelector from './components/TechSelector'
 import DatabaseUrlInput from './components/DatabaseUrlInput'
 import FileTree from './components/FileTree'
 import CodeOutput from './components/CodeOutput'
-import { generateCode } from './api/protocode'
+import ChatPanel from './components/ChatPanel'
+import { generateCode, chatEdit } from './api/protocode'
 
 export default function App() {
   const [idea, setIdea] = useState(null)
   const [techStack, setTechStack] = useState('')
   const [databaseUrl, setDatabaseUrl] = useState('')
   const [result, setResult] = useState(null)
+  const [previousResult, setPreviousResult] = useState(null) // one undo level
+  const [generation, setGeneration] = useState(0)            // bumps on each fresh generate
   const [selectedFile, setSelectedFile] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const outputRef = useRef(null)  // 👈 ref for auto-scroll
+  const outputRef = useRef(null)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -29,14 +32,14 @@ export default function App() {
     }
   }, [])
 
-  // Auto-scroll when result arrives 👇
+  // Auto-scroll only when a NEW generation arrives (not on chat edits)
   useEffect(() => {
-    if (result && outputRef.current) {
+    if (generation > 0 && outputRef.current) {
       setTimeout(() => {
         outputRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
       }, 100)
     }
-  }, [result])
+  }, [generation])
 
   const handleGenerate = async () => {
     if (!idea) return setError('No idea received from ProtoIdea yet.')
@@ -44,6 +47,7 @@ export default function App() {
     setError('')
     setLoading(true)
     setResult(null)
+    setPreviousResult(null)
     setSelectedFile(null)
     try {
       const ideaSummary = `
@@ -54,6 +58,7 @@ export default function App() {
       `.trim()
       const data = await generateCode(ideaSummary, techStack, databaseUrl)
       setResult(data)
+      setGeneration(g => g + 1)
       if (data.files?.length > 0) setSelectedFile(data.files[0])
     } catch {
       setError('Code generation failed. Please try again.')
@@ -65,6 +70,47 @@ export default function App() {
   const handleFileClick = (filePath) => {
     const file = result?.files.find(f => f.path === filePath)
     if (file) setSelectedFile(file)
+  }
+
+  // Called by ChatPanel. Returns a summary for the panel, throws on failure.
+  const handleChatEdit = async (instruction) => {
+    const data = await chatEdit(instruction, result.files, techStack)
+    const patches = data.files || []
+
+    if (patches.length === 0) {
+      return { explanation: data.explanation, changed: [], created: [] }
+    }
+
+    const patchMap = new Map(patches.map(p => [p.path, p.content]))
+    const existing = new Set(result.files.map(f => f.path))
+
+    const updatedFiles = result.files.map(f =>
+      patchMap.has(f.path) ? { ...f, content: patchMap.get(f.path) } : f
+    )
+    const createdPatches = patches.filter(p => !existing.has(p.path))
+    createdPatches.forEach(p => updatedFiles.push({ path: p.path, content: p.content }))
+
+    setPreviousResult(result) // snapshot before applying
+    setResult({ ...result, files: updatedFiles })
+
+    // keep the open file in sync with the edit
+    if (selectedFile && patchMap.has(selectedFile.path)) {
+      setSelectedFile({ ...selectedFile, content: patchMap.get(selectedFile.path) })
+    }
+
+    return {
+      explanation: data.explanation,
+      changed: patches.filter(p => existing.has(p.path)).map(p => p.path),
+      created: createdPatches.map(p => p.path),
+    }
+  }
+
+  const handleUndo = () => {
+    if (!previousResult) return
+    setResult(previousResult)
+    const stillThere = previousResult.files.find(f => f.path === selectedFile?.path)
+    setSelectedFile(stillThere || previousResult.files[0] || null)
+    setPreviousResult(null)
   }
 
   const handleSendToProtoTest = async () => {
@@ -84,7 +130,7 @@ export default function App() {
       setError('Could not send project to ProtoTest.')
     }
   }
-  
+
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
 
@@ -168,7 +214,7 @@ export default function App() {
 
       {/* Output Section */}
       {result && (
-        <div ref={outputRef}>  {/* 👈 scroll target */}
+        <div ref={outputRef}>
 
           {/* Send to ProtoTest banner */}
           <div style={{
@@ -208,7 +254,7 @@ export default function App() {
             </button>
           </div>
 
-          {/* File viewer */}
+          {/* File viewer + chat */}
           <div style={{
             display: 'flex',
             flex: 1,
@@ -224,6 +270,12 @@ export default function App() {
               file={selectedFile}
               allFiles={result.files}
               projectName={result.project_name}
+            />
+            <ChatPanel
+              key={generation}  /* fresh chat for each new generation */
+              onSend={handleChatEdit}
+              onUndo={handleUndo}
+              canUndo={!!previousResult}
             />
           </div>
         </div>
