@@ -268,24 +268,62 @@ def patch_django_migrations(project_dir) -> list[str]:
     return [f"migration {p.relative_to(project_dir)}".replace("\\", "/") for p in new]
 
 def detect_api_base(project_dir) -> str:
-    """Return '/api' if the backend mounts its routes under /api but the
-    frontend calls don't already include it, otherwise ''."""
+    """Return '/api' if the backend mounts routes under /api and the frontend
+    doesn't already add it when it reads VITE_API_URL, otherwise ''."""
     root = Path(project_dir)
 
-    # frontend already writes /api/ in its own calls
+    # frontend already appends /api to VITE_API_URL itself
     fe = root / "frontend" / "src"
     if fe.exists():
         for f in fe.rglob("*"):
             if f.is_file() and f.suffix in EXTS:
-                if "/api/" in f.read_text(encoding="utf-8", errors="ignore"):
+                text = f.read_text(encoding="utf-8", errors="ignore")
+                if re.search(r"""VITE_API_URL\s*[})+]?\s*['"`]?\s*/api""", text):
                     return ""
 
-    # backend mounts under api/
+    # backend mounts routes under /api
     for f in (root / "backend").rglob("*.py"):
         if any(p in SKIP_DIRS | {"venv", ".venv"} for p in f.parts):
             continue
         text = f.read_text(encoding="utf-8", errors="ignore")
-        if re.search(r"""path\(\s*['"]api/['"]""", text) or \
-           re.search(r"""prefix\s*=\s*['"]/api['"]""", text):
+        if re.search(r"""path\(\s*['"]api/""", text) or \
+           re.search(r"""prefix\s*=\s*['"]/api\b""", text):
             return "/api"
     return ""
+
+def patch_route_tags(project_dir) -> list[str]:
+    """Fix '<path path=...>' used instead of '<Route path=...>' inside <Routes>."""
+    src = Path(project_dir) / "frontend" / "src"
+    changed = []
+    if not src.exists():
+        return changed
+    for f in src.rglob("*"):
+        if not f.is_file() or f.suffix not in {".js", ".jsx", ".ts", ".tsx"}:
+            continue
+        if any(p in SKIP_DIRS for p in f.parts):
+            continue
+        text = f.read_text(encoding="utf-8", errors="ignore")
+        if "<Routes" not in text or "<path" not in text:
+            continue
+        new = re.sub(r"<path(\s+path=)", r"<Route\1", text)
+        if new != text:
+            f.write_text(new, encoding="utf-8")
+            changed.append(str(f.relative_to(project_dir)).replace("\\", "/"))
+    return changed
+
+def patch_bcrypt(project_dir) -> list[str]:
+    """passlib 1.7.4 breaks with bcrypt >= 4.1. Pin bcrypt to 4.0.1."""
+    req = Path(project_dir) / "backend" / "requirements.txt"
+    if not req.exists():
+        return []
+    text = req.read_text(encoding="utf-8", errors="ignore")
+    if not re.search(r"(?im)^\s*passlib", text):
+        return []
+    if re.search(r"(?im)^\s*bcrypt\s*==\s*4\.0\.1", text):
+        return []
+    if re.search(r"(?im)^\s*bcrypt\b", text):
+        text = re.sub(r"(?im)^\s*bcrypt\b.*$", "bcrypt==4.0.1", text)
+    else:
+        text = text.rstrip() + "\nbcrypt==4.0.1"
+    req.write_text(text + "\n", encoding="utf-8")
+    return ["bcrypt==4.0.1 (pinned for passlib)"]

@@ -149,6 +149,7 @@ def _detect_frontend_run_command(
             "--",
             "--port",
             str(port),
+            "--strictPort",
             "--host",
             "0.0.0.0",
         ]
@@ -269,6 +270,7 @@ def get_frontend_commands(
                 "--",
                 "--port",
                 str(port),
+                "--strictPort",
                 "--host",
                 "0.0.0.0",
             ]

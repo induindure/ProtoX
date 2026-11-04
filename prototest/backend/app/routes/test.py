@@ -8,7 +8,7 @@ from app.routes.services.stack_runner import get_runner
 from app.routes.services.project_builder import build_project_dir
 from app.routes.services.test_generator import generate_test_file
 from app.routes.services.test_executor import run_pytest, run_jest, cleanup
-from app.routes.services.code_fixer import fix_syntax_error, fix_test_failure
+from app.routes.services.code_fixer import fix_syntax_error, fix_test_failure, fix_wrong_test
 
 router = APIRouter()
 
@@ -181,6 +181,15 @@ async def auto_fix(request: TestRequest):
         if execution.get("passed"):
             success = True
             break
+
+        out_text = execution.get("stdout", "") + "\n" + execution.get("stderr", "")
+        new_test = None
+        if runner == "pytest" and ("422" in out_text or "KeyError" in out_text):
+            new_test = await fix_wrong_test(file_inputs, out_text, test_code)
+        if new_test:
+            test_code = new_test        # retry with the repaired test
+            iteration["fixed_files"] = ["(test file)"]
+            continue
 
         patch = await fix_test_failure(
             file_inputs, execution.get("stdout", ""), execution.get("stderr", ""), test_code, runner

@@ -39,6 +39,9 @@ from app.services.vue_fixer import fix_vue_react_libs, fix_vue_jsx
 from app.services.llm_provider import get_llm, message_text
 from app.services.bad_import_fixer import fix_nonexistent_imports
 import json_repair
+from .quality_checker import check_project
+from app.services.quality_fixers import fix_absolute_redirects, fix_seed_guard
+from app.services.feature_completer import fix_dead_buttons
 
 load_dotenv()
 
@@ -67,6 +70,18 @@ General requirements:
 - Every name imported from a project file must be defined and exported by that file.
   Before finishing, check every import in every frontend and backend file.
 
+NO PLACEHOLDER CONTENT (mandatory):
+1. Never hardcode sample data (fake users, events, counts, listener numbers,
+   dates) in frontend components. All displayed data must come from the backend API.
+2. If an API call fails, show an error or empty state ("Nothing here yet"),
+   never fallback mock data.
+3. Every button and link must do something real: an onClick handler that calls
+   the API or navigates, or a working route. No decorative buttons.
+4. Every feature the UI shows (edit profile, create event, join room) must have a
+   matching backend endpoint and a working form or modal in the frontend.
+5. Seed data is allowed only via an explicit backend management command and must
+   not run automatically on deploy.
+
 Configuration and secrets:
 - Never hardcode secrets or connection strings in code. Read them from environment variables.
 - Read the database connection string from DATABASE_URL and the server port from PORT.
@@ -75,6 +90,29 @@ Configuration and secrets:
 - Every setting must have a safe default so the app starts without a .env file
   (e.g. SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-change-me") in Django,
   a default value on the Settings field in FastAPI, process.env.X || "default" in Express).
+
+QUALITY RULES (mandatory):
+1. NO FAKE DATA. Never hardcode sample users, rooms, events, counts or numbers in
+   frontend components or in backend startup code. Show an empty state
+   ("Nothing here yet") when there is no data. Seed data is allowed only inside a
+   function that runs when os.getenv("SEED_DEMO_DATA") == "true" (default: off).
+2. EVERY BUTTON MUST WORK. Each <button> needs a real click handler (@click / onClick),
+   be type="submit" inside a <form>, or be a router link. Every action the UI offers
+   (edit profile, create, join, delete) must have a working form or modal in the
+   frontend AND a matching backend endpoint. If a feature is not implemented,
+   do not render its button.
+3. NO HARDCODED ABSOLUTE PATHS. Never use window.location.href = '/something'.
+   Use the router (router.push / navigate) or import.meta.env.BASE_URL + 'something'.
+4. NO HARDCODED STATS. Counts like followers, totals and badges must come from the API
+   or be omitted. Never write a literal 0 as a placeholder.
+5. DATABASE: read DATABASE_URL from the environment, falling back to SQLite only for local use.
+
+DATA RULES:
+- Never hardcode sample statistics, counts, names, or placeholder data in the UI
+  (no values like '1.2k', '$4,500', or fake lists).
+- Every number shown must come from the API response or from state derived from it.
+- If a value has no backend field yet, either add the field to the model and API,
+  or leave that card out. When there's no data, show 0 or an empty state.
 
 Backend requirements:
 - Main entry point, routes for every feature (at least 3), at least 2 data models,
@@ -237,6 +275,28 @@ DEPLOYMENT RULES (mandatory):
 5. Django: use env vars SECRET_KEY, DEBUG, ALLOWED_HOSTS, CORS_ORIGINS;
    use django-cors-headers, whitenoise, gunicorn; STATIC_ROOT = BASE_DIR / "staticfiles".
 6. backend/requirements.txt must list every dependency (including gunicorn/uvicorn).
+7. Never use Next.js. The frontend is always Vite (React or Vue).
+8. Secrets: read DATABASE_URL, SECRET_KEY and every API key only from environment
+   variables. Never write real values, passwords or database URLs in the code,
+   not even as defaults.
+9. requirements.txt must also include every package that is imported or used by
+   a feature, such as email-validator (when EmailStr is used), psycopg2-binary
+   (Postgres), django-cors-headers, and djangorestframework-simplejwt
+   (never rest_framework_simplejwt, which is a different package).
+10. Django: every app that has models must ship its migrations/ folder with
+    __init__.py and its migration files (including core when AUTH_USER_MODEL
+    is core.User).
+11. Vue: include frontend/vite.config.js with @vitejs/plugin-vue, and postcss.config.js
+    and tailwind.config.js if Tailwind is used.
+12. API routes are mounted under /api, and the frontend must build its requests
+    against VITE_API_URL accordingly.
+13. Never hardcode sample statistics, counts or placeholder data in the UI
+    (no values like '1.2k'). Every number comes from the API. With no data,
+    show 0 or an empty state.
+14. React Router: inside <Routes>, every child must be <Route path="..." element={...} />.
+    Never write <path>, and never put other elements directly inside <Routes>.
+    In JSX always use className (never class) and htmlFor (never for).
+15. If passlib is used for password hashing, requirements.txt must pin bcrypt==4.0.1.
 """
 
 def _text(response) -> str:
@@ -461,6 +521,14 @@ async def generate_code(
     )
 
     parsed["files"] = fix_double_depends(
+        parsed["files"]
+    )
+
+    parsed["files"] = fix_absolute_redirects(
+        parsed["files"]
+    )
+
+    parsed["files"] = fix_seed_guard(
         parsed["files"]
     )
 

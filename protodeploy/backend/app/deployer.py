@@ -3,7 +3,9 @@ from pathlib import Path
 import requests
 from .detector import detect_stack
 from .templates import PAGES_WORKFLOW, GITIGNORE, render_yaml
-from .patch import (patch_router_basename, patch_requirements, patch_vue_config,patch_secrets, patch_django_migrations, detect_api_base)
+from .patch import (patch_router_basename, patch_requirements, patch_vue_config,
+                    patch_secrets, patch_django_migrations, detect_api_base,
+                    patch_route_tags, patch_bcrypt)
 GH = "https://api.github.com"
 
 def _h(token: str) -> dict:
@@ -36,6 +38,8 @@ def deploy_to_github(project_dir: Path, token: str, repo_name: str) -> dict:
     patched += patch_vue_config(work)
     patched += patch_secrets(work)
     patched += patch_django_migrations(work)
+    patched += patch_route_tags(work)
+    patched += patch_bcrypt(work)
 
     # 2. Create repo (retry with suffix if name is taken)
     for _ in range(3):

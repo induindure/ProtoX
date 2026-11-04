@@ -20,6 +20,7 @@ import tempfile
 from pathlib import Path
 from typing import List
 from .vue_patch import patch_vue_config
+from .vue_patch import patch_vue_config, patch_route_tags
 
 WORKSPACE_ROOT = Path(tempfile.gettempdir()) / "protox_preview_workspaces"
 WORKSPACE_ROOT.mkdir(exist_ok=True)
@@ -49,7 +50,7 @@ def build_project_dir(project_id: str, files: List[dict]) -> Path:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
 
-    patched = patch_vue_config(root)
+    patched = patch_vue_config(root) + patch_route_tags(root)
     if patched:
         print(f"[preview] patched Vue project: {patched}", flush=True)
 

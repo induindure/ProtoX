@@ -112,6 +112,9 @@ def _strip_backend_prefix(code: str) -> str:
 def _clean_pytest_output(code: str) -> str:
     """Remove echoed prompt text, repeated copies, and a truncated tail."""
     # echoed instructions
+    idx = code.find("import pytest")
+    if idx > 0:
+        code = code[idx:]
     code = code.split("[instruction]")[0]
 
     # model repeated the whole file: keep the first copy only
@@ -147,9 +150,19 @@ async def generate_test_file(files: list, runner: str) -> str:
     """
     system_prompt = PYTEST_SYSTEM_PROMPT if runner == "pytest" else JEST_SYSTEM_PROMPT
 
-    # only send backend-relevant files, in FULL, within a size budget
-    relevant = [f for f in files if _is_backend_file(f.path, runner)]
-    parts, budget = [], 120_000
+    # send the most important backend files first, within a small size budget
+    def _priority(path: str) -> int:
+        p = path.lower()
+        for i, key in enumerate(("schema", "main", "route", "model", "database")):
+            if key in p:
+                return i
+        return 99
+
+    relevant = sorted(
+        [f for f in files if _is_backend_file(f.path, runner)],
+        key=lambda f: _priority(f.path),
+    )
+    parts, budget = [], 8_000
     for f in relevant:
         if len(f.content) > budget:
             continue
@@ -162,8 +175,14 @@ async def generate_test_file(files: list, runner: str) -> str:
         f"{file_dump}"
     )
 
+    # Groq counts input + output against 8000 tokens/minute, so size the
+    # output cap from the input instead of using a fixed number.
+    est_input = (len(system_prompt) + len(user_prompt)) // 3
+    out_tokens = max(3000, min(6000, 7500 - est_input))
+    print(f"[test_gen] est_input~{est_input}, out_tokens={out_tokens}", flush=True)
+
     raw = (await asyncio.to_thread(
-        complete, system_prompt, user_prompt, 4000
+        complete, system_prompt, user_prompt, out_tokens
     )).strip()
 
     raw = strip_code_fences(raw)

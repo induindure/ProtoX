@@ -7,6 +7,8 @@ pytest/jest run points at.
 import os
 import json
 from dotenv import load_dotenv
+from app.routes.services.llm_provider import complete
+from app.routes.services.llm_utils import strip_code_fences
 
 from app.routes.services.llm_utils import strip_code_fences
 from app.routes.services.test_generator import _is_backend_file
@@ -106,3 +108,32 @@ async def fix_test_failure(files: list, stdout: str, stderr: str, test_code: str
         if f.get("path") and f.get("content")
     ]
     return patches or None
+
+async def fix_wrong_test(files: list, output: str, test_code: str) -> str | None:
+    """Ask the LLM to correct the TEST when failures show it used the wrong
+    field names/types. Returns the new test code, or None."""
+    schema_files = [
+        f for f in files
+        if any(k in f.path.lower() for k in ("schema", "model"))
+    ]
+    context = "\n\n".join(f"--- {f.path} ---\n{f.content}" for f in schema_files)[:9000]
+
+    system = (
+        "You fix pytest files. You are given the project's schema/model files, a pytest "
+        "test file, and its failure output. If the test sends wrong field names, types, "
+        "or missing required fields (for example a 422), correct the TEST so it matches "
+        "the schemas exactly. Return ONLY the full corrected Python test file, with no "
+        "markdown, no explanation and no backticks."
+    )
+    user = (
+        f"Schemas and models:\n{context}\n\n"
+        f"Failure output:\n{output[-2500:]}\n\n"
+        f"Test file:\n{test_code}"
+    )
+    try:
+        out = await asyncio.to_thread(complete, system, user, 3500)
+    except Exception as e:
+        print(f"[auto-fix] test repair failed: {e}")
+        return None
+    code = strip_code_fences(out.strip())
+    return code if "def test_" in code else None
