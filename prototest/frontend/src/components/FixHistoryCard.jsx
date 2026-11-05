@@ -23,7 +23,7 @@ export default function FixHistoryCard({ data }) {
         color: '#dc2626',
         bg: '#fee2e2',
         icon: '⚠️',
-        label: `Still failing after ${data.attempts_used} attempt${data.attempts_used === 1 ? '' : 's'} — manual review needed`,
+        label: `Still failing after ${data.attempts_used} attempt${data.attempts_used === 1 ? '' : 's'} - Get the fixed prompt and paste into ProtoCode's chatbot`,
       }
 
   return (
