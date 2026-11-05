@@ -355,6 +355,23 @@ def fix_react_package_json(files: list[dict]) -> list[dict]:
 
     return files
 
+def missing_parts(files: list, tech_stack: str) -> list:
+    """Return which main parts of the app are missing: 'frontend' and/or 'backend'."""
+    paths = [f["path"].replace("\\", "/").lower() for f in files]
+    has = lambda s: any(s in p for p in paths)
+    missing = []
+
+    if not (has("frontend/package.json") and has("frontend/index.html")
+            and (has("frontend/src/main") or has("frontend/src/app"))):
+        missing.append("frontend")
+
+    if "django" in tech_stack.lower():
+        ok = has("backend/manage.py")
+    else:
+        ok = has("backend/app/main.py") or has("backend/main.py")
+    if not ok:
+        missing.append("backend")
+    return missing
 
 async def generate_code(
     idea: str,
@@ -425,6 +442,43 @@ async def generate_code(
         "PARSED KEYS:",
         list(parsed.keys())
     )
+
+    parts = missing_parts(parsed.get("files", []), tech_stack)
+
+    if parts == ["frontend"]:
+        backend_ctx = "\n\n".join(
+            f"--- {f['path']} ---\n{f['content']}"
+            for f in parsed["files"]
+            if any(k in f["path"].lower() for k in ("router", "route", "schema", "main"))
+        )[:7000]
+        retry = await llm.ainvoke([
+            SystemMessage(content=(
+                "You generate ONLY the frontend of a web app. Return ONLY valid JSON: "
+                '{"files":[{"path":"frontend/...","content":"..."}]}. '
+                "Use Vite, React Router with basename import.meta.env.BASE_URL, and "
+                "import.meta.env.VITE_API_URL for the API. Keep it compact: package.json, "
+                "index.html, vite.config, src/main, src/App, and 3-5 pages. "
+                "No markdown and no explanation."
+            )),
+            HumanMessage(content=f"App idea:\n{idea}\n\nBackend code:\n{backend_ctx}"),
+        ])
+        extra = message_text(retry).strip()
+        if extra.startswith("```"):
+            extra = extra.split("```")[1]
+            if extra.startswith("json"):
+                extra = extra[4:]
+        try:
+            parsed["files"] += json.loads(extra.strip()).get("files", [])
+        except Exception:
+            pass
+        parts = missing_parts(parsed["files"], tech_stack)
+
+    if parts:
+        names = " and ".join("app screens" if p == "frontend" else "server" for p in parts)
+        raise ValueError(
+            f"The generated project is incomplete: the {names} part is missing. "
+            "Please click Generate again."
+        )
 
     # ---------------------------------------------------------
     # Deterministic Python fixes
