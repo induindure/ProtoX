@@ -7,6 +7,7 @@ import CodeOutput from './components/CodeOutput'
 import ChatPanel from './components/ChatPanel'
 import { generateCode, chatEdit } from './api/protocode'
 import { getDatabaseUrlError } from './utils/databaseUrl'
+import SupabaseGuide from './components/SupabaseGuide'
 
 export default function App() {
   const [idea, setIdea] = useState(null)
@@ -189,6 +190,7 @@ export default function App() {
         <IdeaPanel idea={idea} />
         <TechSelector techStack={techStack} setTechStack={setTechStack} />
         <DatabaseUrlInput databaseUrl={databaseUrl} setDatabaseUrl={setDatabaseUrl} />
+        <SupabaseGuide />
 
         {error && (
           <p style={{ color: 'var(--accent)', fontSize: '0.85rem', fontWeight: 500 }}>{error}</p>
