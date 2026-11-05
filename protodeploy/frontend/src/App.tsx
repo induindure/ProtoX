@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { deployProject, getBuildStatus, type DeployResult } from "./api";
+import GithubTokenGuide from "./components/GithubTokenGuide";
 
 export default function App() {
   const [file, setFile] = useState<File | null>(null);
@@ -66,7 +67,8 @@ export default function App() {
         value={token}
         onChange={(e) => setToken(e.target.value)}
       />
-
+      <GithubTokenGuide />
+      
       <button
         onClick={handleDeploy}
         disabled={loading || !file || !repo || !token}
