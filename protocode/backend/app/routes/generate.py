@@ -1,9 +1,11 @@
 import re
+
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from langchain_core.messages import SystemMessage, HumanMessage
 from app.services.code_generator import generate_code
 from app.services.code_fixer import fix_code, _llm, message_text, parse_json_loose
+from app.services.database_url_validator import validate_database_url
 
 router = APIRouter()
 
@@ -38,7 +40,12 @@ def fix_code_endpoint(request: FixRequest):
 class CodeRequest(BaseModel):
     idea: str
     tech_stack: str
-    database_url: str | None = None
+    database_url: str
+
+    @field_validator("database_url")
+    @classmethod
+    def check_database_url(cls, value: str) -> str:
+        return validate_database_url(value)
 
 
 @router.post("/generate-code")

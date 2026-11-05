@@ -42,6 +42,7 @@ import json_repair
 from .quality_checker import check_project
 from app.services.quality_fixers import fix_absolute_redirects, fix_seed_guard
 from app.services.feature_completer import fix_dead_buttons
+from app.services.database_url_validator import validate_database_url
 
 load_dotenv()
 
@@ -376,8 +377,10 @@ def missing_parts(files: list, tech_stack: str) -> list:
 async def generate_code(
     idea: str,
     tech_stack: str,
-    database_url: str | None = None
+    database_url: str
 ):
+    database_url = validate_database_url(database_url)
+
     llm = get_llm(max_tokens=32000)
 
     user_content = f"App idea:\n{idea}\n\nTech stack: {tech_stack}"

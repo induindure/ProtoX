@@ -1,4 +1,7 @@
+import { getDatabaseUrlError } from '../utils/databaseUrl'
+
 export default function DatabaseUrlInput({ databaseUrl, setDatabaseUrl }) {
+  const validationError = databaseUrl ? getDatabaseUrlError(databaseUrl) : ''
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
       <label style={{
@@ -8,13 +11,15 @@ export default function DatabaseUrlInput({ databaseUrl, setDatabaseUrl }) {
         letterSpacing: '0.06em',
         textTransform: 'uppercase',
       }}>
-        Database URL{' '}
-        <span style={{ textTransform: 'none', fontWeight: 400, color: 'var(--text-muted)' }}>
-        </span>
+        Database URL (Required)
       </label>
       <input
         type="text"
         value={databaseUrl}
+        required
+        aria-required="true"
+        aria-invalid={Boolean(validationError)}
+        aria-describedby="database-url-status"
         onChange={(e) => setDatabaseUrl(e.target.value)}
         placeholder="postgresql://user:password@host:5432/dbname"
         style={{
@@ -28,6 +33,16 @@ export default function DatabaseUrlInput({ databaseUrl, setDatabaseUrl }) {
           color: 'var(--text)',
         }}
       />
+      <span
+        id="database-url-status"
+        role={validationError ? 'alert' : 'status'}
+        style={{
+          color: validationError ? 'var(--accent)' : 'var(--text-muted)',
+          fontSize: '0.8rem',
+        }}
+      >
+        {validationError || (databaseUrl ? 'URL format looks valid.' : 'Enter a database connection URL.')}
+      </span>
     </div>
   )
 }

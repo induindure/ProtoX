@@ -6,6 +6,7 @@ import FileTree from './components/FileTree'
 import CodeOutput from './components/CodeOutput'
 import ChatPanel from './components/ChatPanel'
 import { generateCode, chatEdit } from './api/protocode'
+import { getDatabaseUrlError } from './utils/databaseUrl'
 
 export default function App() {
   const [idea, setIdea] = useState(null)
@@ -19,6 +20,7 @@ export default function App() {
   const [error, setError] = useState('')
 
   const outputRef = useRef(null)
+  const databaseUrlError = getDatabaseUrlError(databaseUrl)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -44,6 +46,7 @@ export default function App() {
   const handleGenerate = async () => {
     if (!idea) return setError('No idea received from ProtoIdea yet.')
     if (!techStack) return setError('Please select a tech stack.')
+    if (databaseUrlError) return setError(databaseUrlError)
     setError('')
     setLoading(true)
     setResult(null)
@@ -193,17 +196,17 @@ export default function App() {
 
         <button
           onClick={handleGenerate}
-          disabled={loading || !idea}
+          disabled={loading || !idea || Boolean(databaseUrlError)}
           style={{
             alignSelf: 'flex-start',
             padding: '0.65rem 2rem',
-            background: loading || !idea ? '#ccc' : 'var(--accent)',
+            background: loading || !idea || databaseUrlError ? '#ccc' : 'var(--accent)',
             color: '#fff',
             border: 'none',
             borderRadius: '6px',
             fontWeight: 700,
             fontSize: '0.95rem',
-            cursor: loading || !idea ? 'not-allowed' : 'pointer',
+            cursor: loading || !idea || databaseUrlError ? 'not-allowed' : 'pointer',
             letterSpacing: '0.03em',
             transition: 'background 0.2s',
           }}
