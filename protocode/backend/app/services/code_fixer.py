@@ -12,6 +12,17 @@ from langchain_groq import ChatGroq
 from app.services.completeness_checker import _norm
 from app.services.llm_provider import get_llm, message_text, parse_json_loose
 
+import json_repair
+
+def _parse(text: str):
+    data = parse_json_loose(text)
+    if data is None:
+        try:
+            data = json_repair.loads(text)   # fixes bad escapes, trailing commas, truncated JSON
+        except Exception:
+            data = None
+    return data if isinstance(data, dict) and "files" in data else None
+
 _SYSTEM = """You are fixing a generated full-stack project that fails when it runs.
 You get the error output, the list of all project files, and the contents of the relevant files.
 
@@ -42,11 +53,15 @@ def fix_code(error_log: str, files: list[dict], all_paths: list[str], tech_stack
         f"Relevant files:\n\n{context}"
     )
 
-    response = _llm().invoke([SystemMessage(content=_SYSTEM), HumanMessage(content=prompt)])
-    text = message_text(response).strip()
-    data = parse_json_loose(text)
+    data = None
+    for attempt in range(2):
+        response = _llm().invoke([SystemMessage(content=_SYSTEM), HumanMessage(content=prompt)])
+        text = message_text(response).strip()
+        data = _parse(text)
+        if data is not None:
+            break
+        print(f"[code-fixer] attempt {attempt + 1}: invalid JSON. Start of reply: {text[:300]!r}")
     if data is None:
-        print(f"[code-fixer] AI returned invalid JSON. Start of reply: {text[:300]!r}")
         return {"explanation": "AI returned an unreadable fix", "files": []}
     fixed = []
     for f in data.get("files", []):

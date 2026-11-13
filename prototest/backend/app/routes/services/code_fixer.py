@@ -94,13 +94,17 @@ async def fix_test_failure(files: list, stdout: str, stderr: str, test_code: str
         "Fix the APPLICATION code so the tests pass. Never change the test file."
     )
 
-    try:
-        result = await asyncio.to_thread(
-            _post_fix,
-            {"error_log": error_log, "files": selected, "all_paths": paths},
-        )
-    except Exception as e:
-        print(f"[auto-fix] could not reach ProtoCode: {e}")
+    result = None
+    for attempt in range(2):
+        try:
+            result = await asyncio.to_thread(
+                _post_fix,
+                {"error_log": error_log, "files": selected, "all_paths": paths},
+            )
+            break
+        except Exception as e:
+            print(f"[auto-fix] ProtoCode fix attempt {attempt + 1} failed: {e}")
+    if result is None:
         return None
 
     if result.get("explanation"):

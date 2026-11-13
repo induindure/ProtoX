@@ -17,7 +17,6 @@ router = APIRouter()
 
 MAX_AUTO_FIX_ATTEMPTS = 3
 
-
 class FileInput(BaseModel):
     path: str
     content: str
@@ -28,6 +27,16 @@ class TestRequest(BaseModel):
     project_name: str
     tech_stack: str
 
+import re
+
+class FixPromptRequest(BaseModel):
+    files: List[FileInput]
+    output: str
+    test_code: str = ""
+    source: str = "test"        # "test" or "preview"
+    user_note: str = ""
+
+ERROR_RE = re.compile(r"traceback|error|exception|failed|refused|cannot find", re.I)
 
 @router.post("/store-project")
 async def store_project(request: TestRequest):
@@ -231,40 +240,62 @@ async def auto_fix(request: TestRequest):
         "files": [{"path": p, "content": c} for p, c in files.items()],
     }
 
-class FixPromptRequest(BaseModel):
-    files: List[FileInput]
-    output: str
-    test_code: str = ""
-
-
 @router.post("/fix-prompt")
 async def fix_prompt(request: FixPromptRequest):
-    keys = ("schema", "model", "route", "router", "main", "view", "serializer")
-    picked, budget = [], 6000
-    for f in request.files:
-        p = f.path.replace("\\", "/").lower()
-        if "backend/" in p and any(k in p for k in keys):
-            if len(f.content) > budget:
-                continue
-            budget -= len(f.content)
-            picked.append(f"--- {f.path} ---\n{f.content}")
+    out = request.output
+    is_preview = request.source == "preview"
 
-    system = (
-        "You write instructions for an AI code editor. You are given failing test output "
-        "and the backend code. Write ONE short instruction (max 120 words) that the user "
-        "can paste into the editor, telling it what to change in the APPLICATION code. "
-        "Name the exact files, routes, fields or functions, and describe the behaviour "
-        "that is expected. If the failure is caused by the test sending wrong field names "
-        "or types and not by an app bug, start with 'TEST ISSUE:' and explain in one "
-        "sentence instead. Plain text only."
-    )
-    user = (
-        f"Failure output:\n{request.output[-2500:]}\n\n"
-        f"Backend code:\n{chr(10).join(picked)}\n\n"
-        f"Test file (excerpt):\n{request.test_code[:1500]}"
-    )
+    if is_preview and not request.user_note.strip() and not ERROR_RE.search(out):
+        return {"prompt": "", "no_issue": True}
+
+    mentioned, keyed = [], []
+    for f in request.files:
+        p = f.path.replace("\\", "/")
+        low = p.lower()
+        name = p.rsplit("/", 1)[-1]
+        if name and (name in out or p in out):
+            mentioned.append(f)
+        elif is_preview:
+            if any(k in low for k in ("main", "app.", "router", "vite.config",
+                                      "package.json", "settings", "requirements")):
+                keyed.append(f)
+        elif "backend/" in low and any(
+            k in low for k in ("schema", "model", "route", "router", "main", "view", "serializer")
+        ):
+            keyed.append(f)
+
+    picked, budget = [], 7000
+    for f in mentioned + keyed:
+        if len(f.content) > budget:
+            continue
+        budget -= len(f.content)
+        picked.append(f"--- {f.path} ---\n{f.content}")
+
+    if is_preview:
+        system = (
+            "You write instructions for an AI code editor. You are given the logs of a web app "
+            "in a preview, an optional description from the user, and some of its code. "
+            "A user description can include functional bugs, UI improvements, styling changes, "
+            "or design requests. These all count as valid problems to address. "
+            "If the user description is non-empty, NEVER reply with NO_ISSUE, even if the logs "
+            "show no errors. Follow the user's description and write ONE short instruction "
+            "(max 120 words) telling the editor what to change in the APP code. "
+            "Only reply with exactly NO_ISSUE if the logs show no real error AND the user "
+            "description is empty. Name the exact files, components or settings where possible. "
+            "Plain text only."
+        )
+        user = (
+            f"User description: {request.user_note or '(none)'}\n\n"
+            f"Logs:\n{out[-3000:]}\n\nCode:\n{chr(10).join(picked)}"
+        )
+
     try:
         text = await asyncio.to_thread(complete, system, user, 1200)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    return {"prompt": text.strip()}
+    text = text.strip()
+    if not text:
+        raise HTTPException(status_code=502, detail="Empty response from model")
+    if text.upper().startswith("NO_ISSUE"):
+        return {"prompt": "", "no_issue": True}
+    return {"prompt": text}

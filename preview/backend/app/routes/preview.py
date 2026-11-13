@@ -69,3 +69,34 @@ async def preview_status(project_id: str):
 async def stop_preview_endpoint(project_id: str):
     process_manager.stop_preview(project_id)
     return {"status": "stopped"}
+
+_SKIP = {"node_modules", ".preview_venv", "venv", ".venv", "__pycache__",
+         "dist", ".git", "staticfiles"}
+_EXT = {".py", ".js", ".jsx", ".ts", ".tsx", ".vue", ".json", ".txt", ".html"}
+
+
+@router.get("/project-files/{project_id}")
+def project_files(project_id: str):
+    from app.services.project_builder import get_project_dir
+
+    root = get_project_dir(project_id)
+    if not root.exists():
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    out, total = [], 0
+    for p in sorted(root.rglob("*")):
+        if not p.is_file() or p.suffix not in _EXT or p.name == "package-lock.json":
+            continue
+        if _SKIP & set(p.relative_to(root).parts):
+            continue
+        try:
+            if p.stat().st_size > 60_000:
+                continue
+            text = p.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            continue
+        total += len(text)
+        if total > 400_000:
+            break
+        out.append({"path": p.relative_to(root).as_posix(), "content": text})
+    return {"files": out}
