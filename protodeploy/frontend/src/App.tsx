@@ -69,6 +69,10 @@ export default function App() {
       />
       <GithubTokenGuide />
       
+      <p className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+        <b>Note:</b> Render's free plan lets you keep only one app with saved data per account. If you've already deployed one project, delete it or use a different Render account before deploying another.
+      </p>
+
       <button
         onClick={handleDeploy}
         disabled={loading || !file || !repo || !token}
