@@ -290,7 +290,7 @@ async def fix_prompt(request: FixPromptRequest):
         )
 
     try:
-        text = await asyncio.to_thread(complete, system, user, 1200)
+        text = await asyncio.to_thread(complete, system, user, 2000)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     text = text.strip()
