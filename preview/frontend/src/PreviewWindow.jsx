@@ -146,9 +146,11 @@ export default function PreviewWindow({ projectId }) {
         <button className="preview-btn" onClick={() => setShowLogs(s => !s)}>
           {showLogs ? 'Hide logs' : 'Show logs'}
         </button>
-        <button className="preview-btn" onClick={() => setShowHelp(s => !s)}>
-          Something wrong?
-        </button>
+        {(bothRunning || anyFailed) && (
+          <button className="preview-btn" onClick={() => setShowHelp(s => !s)}>
+            Something wrong?
+          </button>
+        )}
         <button className="preview-btn preview-btn--danger" onClick={stopPreview}>
           Stop preview
         </button>

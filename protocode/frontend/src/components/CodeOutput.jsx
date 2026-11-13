@@ -87,15 +87,14 @@ export default function CodeOutput({ file, allFiles, projectName }) {
             disabled={downloading}
             style={{
               padding: '0.35rem 0.9rem',
-              background: 'var(--accent)',
-              color: '#fff',
-              border: 'none',
+              background: 'transparent',
+              color: 'var(--accent)',
+              border: '1px solid var(--accent)',
               borderRadius: '5px',
               fontSize: '0.8rem',
               cursor: downloading ? 'not-allowed' : 'pointer',
               fontWeight: 700,
               letterSpacing: '0.03em',
-              transition: 'background 0.2s',
             }}
           >
             {downloading ? 'Downloading...' : 'Download ZIP'}

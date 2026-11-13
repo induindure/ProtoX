@@ -229,28 +229,34 @@ export default function App() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            gap: '1.5rem',
           }}>
             <div>
-              <span style={{ fontWeight: 700, fontSize: '0.95rem', color: '#166534' }}>
-                Code generated successfully!
-              </span>
-              <span style={{ color: '#166534', fontSize: '0.85rem', marginLeft: '0.75rem' }}>
-                Ready to test your project?
-              </span>
+              <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#166534' }}>
+                Code generated successfully!{' '}
+                <span style={{ fontWeight: 400, fontSize: '0.85rem' }}>
+                  Next: send it to ProtoTest to run tests.
+                </span>
+              </div>
+              <div style={{ fontSize: '0.85rem', color: '#777', marginTop: '0.25rem' }}>
+                Want to deploy? Download the ZIP when you're happy with the final version. Made changes later? Download it again.
+              </div>
             </div>
             <button
               onClick={handleSendToProtoTest}
               style={{
-                padding: '0.5rem 1.4rem',
+                padding: '0.6rem 1.6rem',
                 background: '#16a34a',
                 color: '#fff',
                 border: 'none',
                 borderRadius: '6px',
                 fontWeight: 700,
-                fontSize: '0.85rem',
+                fontSize: '0.9rem',
                 cursor: 'pointer',
                 letterSpacing: '0.03em',
+                boxShadow: '0 2px 8px rgba(22,163,74,0.35)',
                 transition: 'background 0.2s',
+                whiteSpace: 'nowrap',
               }}
               onMouseOver={e => e.target.style.background = '#15803d'}
               onMouseOut={e => e.target.style.background = '#16a34a'}
