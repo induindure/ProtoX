@@ -85,8 +85,12 @@ export default function GithubTokenGuide() {
       <div className="px-details-body">
         <div className="px-alert px-alert-info" style={{ marginBottom: 14 }}>
           <span>
-            <strong>Shortcut:</strong> this link opens GitHub’s form with the name and both scopes filled in. Check they’re ticked before generating.{" "}
-            <a href="https://github.com/settings/tokens/new?scopes=repo,workflow&description=ProtoDeploy" target="_blank" rel="noreferrer" style={{ fontWeight: 700 }}>
+            <strong>Shortcut:</strong> this link opens GitHub’s form with the name and both scopes filled in. Check they’re ticked before generating.
+            <a
+            href="https://github.com/settings/tokens/new?scopes=repo,workflow&description=ProtoDeploy"
+            target="_blank"
+            rel="noreferrer"
+            style={{ fontWeight: 700, display: "block", marginTop: 6 }}>
               Create token ↗
             </a>
           </span>

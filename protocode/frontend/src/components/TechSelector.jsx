@@ -20,11 +20,21 @@ export default function TechSelector({ techStack, setTechStack }) {
               className={`px-option ${selected ? 'is-selected' : ''}`}
               style={{ padding: selected ? '9px 11px' : '10px 12px', gap: 2 }}
             >
-              <span style={{ display: 'flex', justifyContent: 'space-between', gap: 8, width: '100%' }}>
+              <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 3, width: '100%' }}>
                 <span style={{ fontWeight: 700 }}>{stack.title}</span>
                 <span className="px-small px-muted">{stack.tagline}</span>
               </span>
-              <span className="px-mono" style={{ fontSize: 11, fontWeight: 500, color: selected ? 'var(--accent-text)' : 'var(--faint)' }}>
+              <span
+                className="px-mono"
+                style={{
+                  fontSize: 11,
+                  fontWeight: 500,
+                  color: selected ? 'var(--accent-text)' : 'var(--faint)',
+                  display: 'block',
+                  width: '100%',
+                  textAlign: 'center'
+                }}
+              >
                 {stack.value}
               </span>
             </button>
