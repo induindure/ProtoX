@@ -288,7 +288,20 @@ async def fix_prompt(request: FixPromptRequest):
             f"User description: {request.user_note or '(none)'}\n\n"
             f"Logs:\n{out[-3000:]}\n\nCode:\n{chr(10).join(picked)}"
         )
-
+    else:
+        system = (
+            "You write instructions for an AI code editor (ProtoCode). You are given the "
+            "output of a failed test run, the test code, and some of the project's backend code. "
+            "Write ONE short instruction (max 120 words) telling the editor what to change "
+            "in the BACKEND code so the failing tests pass. Name the exact files, functions "
+            "or endpoints where possible. Plain text only. "
+            "Reply with exactly NO_ISSUE only if the output shows no real failure."
+        )
+        user = (
+            f"Test output:\n{out[-3000:]}\n\n"
+            f"Test code:\n{request.test_code[:2000]}\n\n"
+            f"Code:\n{chr(10).join(picked)}"
+        )
     try:
         text = await asyncio.to_thread(complete, system, user, 2000)
     except Exception as e:
