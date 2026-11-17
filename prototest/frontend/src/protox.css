@@ -352,3 +352,6 @@ a { color: var(--accent-text); }
   .px-workspace.is-two .px-code { padding-bottom: 16px; }
   .px-chat-float { position: static; padding: 12px; border-top: 1px solid var(--border); }
 }
+/* Sidebar takes the larger share while there is nothing in the main area yet (ProtoCode before generating). */
+.px-sidebar.is-wide { flex: 2 1 420px; max-width: none; padding: 28px 32px; }
+.px-sidebar-main.is-narrow { flex: 3 1 480px; }

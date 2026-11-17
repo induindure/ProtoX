@@ -20,7 +20,7 @@ export function LogoMark({ size = 30 }: { size?: number }) {
 }
 
 export function Wordmark() {
-  return <span className="px-wordmark"><b>&lt;</b>protox<b>/&gt;</b></span>
+  return <span className="px-wordmark"><b>&lt;</b>ProtoX<b>/&gt;</b></span>
 }
 
 export function CheckIcon({ size = 12 }: { size?: number }) {

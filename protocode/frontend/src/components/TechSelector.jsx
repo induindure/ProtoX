@@ -8,7 +8,7 @@ export default function TechSelector({ techStack, setTechStack }) {
   return (
     <fieldset style={{ border: 0, margin: 0, padding: 0 }}>
       <legend className="px-label" style={{ marginBottom: 8 }}>App type</legend>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 8 }}>
         {STACKS.map(stack => {
           const selected = techStack === stack.value
           return (

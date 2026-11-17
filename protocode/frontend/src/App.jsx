@@ -144,10 +144,10 @@ export default function App() {
       <Header current={2} />
 
       <div className="px-sidebar-layout">
-        <aside className="px-sidebar" aria-label="Code settings">
+        <aside className={`px-sidebar ${result ? '' : 'is-wide'}`} aria-label="Code settings">
           <div>
             <p className="px-eyebrow">Step 2 of 5</p>
-            <h1 className="px-hero-title" style={{ fontSize: 22, marginTop: 6 }}>Generate project code</h1>
+            <h1 className="px-hero-title" style={{ fontSize: result ? 22 : 28, marginTop: 6 }}>Generate project code</h1>
           </div>
 
           <IdeaPanel idea={idea} />
@@ -174,7 +174,7 @@ export default function App() {
           </button>
         </aside>
 
-        <main className="px-sidebar-main">
+        <main className={`px-sidebar-main ${result ? '' : 'is-narrow'}`}>
           {!result && !loading && (
             <div className="px-empty" style={{ flex: 1, justifyContent: 'center' }}>
               <div style={{ marginBottom: 14 }}><LogoMark size={48} /></div>

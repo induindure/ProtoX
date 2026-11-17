@@ -6,7 +6,6 @@ import Header, { Hero, CheckIcon, LogoMark } from './protox/Header'
 import { MODULE_URLS, withTheme } from './protox/theme'
 import IdeaForm from './components/IdeaForm'
 import IdeaCard from './components/IdeaCard'
-import HistoryPanel from './components/HistoryPanel'
 import IdeaRefinement from './components/IdeaRefinement'
 import UserMenu from './components/auth/UserMenu'
 
@@ -18,7 +17,7 @@ function EmptyState() {
     <div className="px-empty is-compact">
       <div style={{ marginBottom: 14 }}><LogoMark size={48} /></div>
       <h2>Your ideas will appear here</h2>
-      <p>Pick a domain and an app type, then generate. You’ll get 3–5 ranked ideas you can refine and send to ProtoCode.</p>
+      <p>Pick a domain and an app type, then generate. You’ll get 3–5 ranked ideas that you can refine and send to ProtoCode.</p>
     </div>
   )
 }
@@ -124,14 +123,6 @@ export default function App() {
       <main className="px-container px-split" style={{ paddingTop: 24 }}>
         <aside className="px-card px-card-flush px-sticky">
           <IdeaForm onSubmit={mutation.mutate} loading={mutation.isPending} />
-          <HistoryPanel
-            onLoad={(record) => {
-              setCurrentResult(record)
-              setSelectedIdea(null)
-              setRefiningIdea(null)
-              toast.success('Loaded from history')
-            }}
-          />
         </aside>
 
         <section style={{ minWidth: 0 }}>
