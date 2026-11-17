@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import './PreviewWindow.css'
 
 const API_BASE = 'http://localhost:8003/api'
 const TEST_API = 'http://localhost:8002/api'
@@ -130,143 +129,156 @@ export default function PreviewWindow({ projectId }) {
     if (anyFailed) setShowHelp(true)
   }, [anyFailed])
 
+  const badge = bothRunning
+    ? { cls: 'px-badge-ok', text: 'Running' }
+    : anyFailed
+      ? { cls: 'px-badge-err', text: `${statusLabel(status?.frontend?.status)} / ${statusLabel(status?.backend?.status)}` }
+      : { cls: 'px-badge-accent', text: `Backend: ${statusLabel(status?.backend?.status)} · Frontend: ${statusLabel(status?.frontend?.status)}` }
+
   return (
-    <div className="preview-container">
-      <div className="preview-toolbar">
-        <span className="preview-title">Live Demo</span>
-
-        {!bothRunning && !anyFailed && (
-          <span className="preview-badge preview-badge--pending">
-            Backend: {statusLabel(status?.backend?.status)} · Frontend: {statusLabel(status?.frontend?.status)}
+    <div className="px-stack">
+      <div className="px-between">
+        <div className="px-row" style={{ gap: 10 }}>
+          <h2 className="px-h2">Live demo</h2>
+          <span className={`px-badge ${badge.cls}`} role="status">
+            {bothRunning || anyFailed ? <span className="px-dot" /> : <span className="px-spinner" style={{ width: 12, height: 12 }} />}
+            {badge.text}
           </span>
-        )}
-        {bothRunning && <span className="preview-badge preview-badge--ok">Running</span>}
-        {anyFailed && <span className="preview-badge preview-badge--error">{statusLabel(status?.frontend?.status)} / {statusLabel(status?.backend?.status)} — see logs</span>}
-
-        <button className="preview-btn" onClick={() => setShowLogs(s => !s)}>
-          {showLogs ? 'Hide logs' : 'Show logs'}
-        </button>
-        {(bothRunning || anyFailed) && (
-          <button className="preview-btn" onClick={() => setShowHelp(s => !s)}>
-            Something wrong?
+        </div>
+        <div className="px-row" style={{ gap: 8 }}>
+          <button className="px-btn px-btn-sm" onClick={() => setShowLogs(s => !s)} aria-expanded={showLogs}>
+            {showLogs ? 'Hide logs' : 'Show logs'}
           </button>
-        )}
-        <button className="preview-btn preview-btn--danger" onClick={stopPreview}>
-          Stop preview
-        </button>
-        <button className="preview-btn" onClick={startPreview}>
-          Restart
-        </button>
+          {(bothRunning || anyFailed) && (
+            <button className={`px-btn px-btn-sm ${showHelp ? '' : 'px-btn-outline'}`} onClick={() => setShowHelp(s => !s)} aria-expanded={showHelp}>
+              Something wrong?
+            </button>
+          )}
+          <button className="px-btn px-btn-sm" onClick={startPreview}>Restart</button>
+          <button className="px-btn px-btn-sm px-btn-danger" onClick={stopPreview}>Stop</button>
+        </div>
       </div>
 
-      {error && <div className="preview-error">{error}</div>}
+      {error && <div className="px-alert px-alert-err" role="alert">{error}</div>}
 
-      {showHelp && (
-        <div style={{
-          border: '1px solid #ddd',
-          borderRadius: '8px',
-          padding: '1rem',
-          margin: '0.75rem 0',
-          background: '#fafafa',
-        }}>
-          <p style={{ margin: '0 0 0.5rem', fontWeight: 600 }}>
-            {anyFailed
-              ? "The app couldn't start. We can write a fix request for you."
-              : 'Page blank, or something not working? We can write a fix request for you.'}
-          </p>
-          <p style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', color: '#555' }}>
-            If the page is blank, or you see the word "crashed", click "show logs" and copy paste the logs here. Or open the Console tab (Ctr+Shift+I) in the browser, and
-            paste any red error below (optional).
-          </p>
-          <textarea
-            value={browserError}
-            onChange={(e) => setBrowserError(e.target.value)}
-            rows={3}
-            placeholder="Paste the red error here (optional)"
-            style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid #ccc', fontSize: '0.85rem' }}
-          />
-          <button
-            className="preview-btn"
-            onClick={handleFixPrompt}
-            disabled={promptLoading || !status}
-            style={{ marginTop: '0.5rem' }}
-          >
-            {promptLoading ? 'Writing the fix request...' : 'Get fix prompt for ProtoCode'}
-          </button>
-
-          {promptError && <div className="preview-error" style={{ marginTop: '0.5rem' }}>{promptError}</div>}
-
-          {showChoices && (
-            <div className="preview-error" style={{ marginTop: '0.5rem' }}>
-              Nothing to go on yet. Paste the browser error or describe what's wrong below, then try again.
-            </div>
-          )}
-          {noIssue && (
-            <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#555' }}>
-              No problem found. If something still looks off, describe it below.
-            </div>
-          )}
-
-          <input
-            value={userNote}
-            onChange={(e) => setUserNote(e.target.value)}
-            placeholder="Or describe what's not working (e.g. 'login button does nothing')"
-            style={{ width: '100%', marginTop: '0.5rem', padding: '0.5rem', borderRadius: '6px', border: '1px solid #ccc', fontSize: '0.85rem' }}
-          />
-
-          {fixPrompt && (
-            <div style={{ marginTop: '0.75rem' }}>
-              <textarea
-                readOnly
-                value={fixPrompt}
-                rows={6}
-                style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid #ccc', fontSize: '0.85rem' }}
-              />
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '0.5rem' }}>
-                <button className="preview-btn" onClick={handleCopy}>
-                  {copied ? 'Copied' : 'Copy prompt'}
-                </button>
-                <span style={{ fontSize: '0.8rem', color: '#555' }}>
-                  Paste it into the ProtoCode chat, then send the project to ProtoTest again.
-                </span>
+      {showLogs && (
+        <section className="px-card px-card-flush">
+          {status?.frontend && status?.backend ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
+              <div style={{ minWidth: 0 }}>
+                <div className="px-card-head"><span className="px-h3">Frontend</span><span className="px-badge px-badge-neutral">{status.frontend.status}</span></div>
+                <pre className="px-code px-code-wrap" style={{ maxHeight: 280, fontSize: 12 }}>{status.frontend.log.join('\n')}</pre>
+              </div>
+              <div style={{ minWidth: 0, borderLeft: '1px solid var(--border)' }}>
+                <div className="px-card-head"><span className="px-h3">Backend</span><span className="px-badge px-badge-neutral">{status.backend.status}</span></div>
+                <pre className="px-code px-code-wrap" style={{ maxHeight: 280, fontSize: 12 }}>{status.backend.log.join('\n')}</pre>
               </div>
             </div>
+          ) : (
+            <pre className="px-code" style={{ fontSize: 12 }}>Waiting for processes to start… (status: {status?.status || 'unknown'})</pre>
           )}
-        </div>
+        </section>
       )}
 
-      {showLogs && status?.frontend && status?.backend && (
-        <div className="preview-logs">
-          <div>
-            <h4>Frontend ({status.frontend.status})</h4>
-            <pre>{status.frontend.log.join('\n')}</pre>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'flex-start' }}>
+        <section className="px-card px-card-flush" style={{ flex: '999 1 640px', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid var(--border)', background: 'var(--surface2)' }}>
+            <span style={{ display: 'flex', gap: 6 }} aria-hidden="true">
+              <span style={{ width: 10, height: 10, borderRadius: 999, background: 'var(--bar2)' }} />
+              <span style={{ width: 10, height: 10, borderRadius: 999, background: 'var(--bar2)' }} />
+              <span style={{ width: 10, height: 10, borderRadius: 999, background: 'var(--bar2)' }} />
+            </span>
+            <span className="px-mono px-small" style={{ flex: 1, minWidth: 0, padding: '4px 12px', borderRadius: 8, background: 'var(--surface)', color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {bothRunning ? status.frontend.url : 'Starting…'}
+            </span>
+            {bothRunning && (
+              <a href={status.frontend.url} target="_blank" rel="noreferrer" className="px-small" style={{ fontWeight: 600 }}>Open in new tab ↗</a>
+            )}
           </div>
-          <div>
-            <h4>Backend ({status.backend.status})</h4>
-            <pre>{status.backend.log.join('\n')}</pre>
-          </div>
-        </div>
-      )}
-      {showLogs && !(status?.frontend && status?.backend) && (
-        <div className="preview-logs">
-          <pre>Waiting for processes to start... (status: {status?.status || 'unknown'})</pre>
-        </div>
-      )}
+          {bothRunning ? (
+            <iframe
+              key={status.frontend.url}
+              title="App preview"
+              src={status.frontend.url}
+              style={{ display: 'block', width: '100%', height: 'min(640px, calc(100vh - 260px))', minHeight: 420, border: 0, background: '#FFFFFF' }}
+            />
+          ) : (
+            <div style={{ height: 420, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, color: 'var(--muted)' }}>
+              {anyFailed ? (
+                <>
+                  <span className="px-badge px-badge-err">Couldn’t start</span>
+                  <p style={{ margin: 0 }}>The demo app failed to start. Check the logs, or use “Something wrong?”.</p>
+                </>
+              ) : (
+                <>
+                  <span className="px-spinner" style={{ width: 28, height: 28, color: 'var(--accent)' }} />
+                  <p style={{ margin: 0 }}>Spinning up your app… installing can take a minute or two.</p>
+                </>
+              )}
+            </div>
+          )}
+        </section>
 
-      <div className="preview-frame-wrap">
-        {bothRunning ? (
-          <iframe
-            key={status.frontend.url}
-            title="App preview"
-            src={status.frontend.url}
-            className="preview-frame"
-          />
-        ) : (
-          <div className="preview-placeholder">
-            {anyFailed
-              ? 'The demo app failed to start. Check the logs above.'
-              : 'Spinning up your app...'}
-          </div>
+        {showHelp && (
+          <aside className="px-card px-stack" style={{ flex: '1 1 320px', maxWidth: 400 }} aria-label="Get help fixing the app">
+            <div className="px-row" style={{ gap: 10, flexWrap: 'nowrap' }}>
+              <span style={{ width: 32, height: 32, borderRadius: 9, background: 'var(--brand)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z" /></svg>
+              </span>
+              <div>
+                <h2 className="px-h3">Something wrong?</h2>
+                <p className="px-small px-muted" style={{ margin: 0 }}>
+                  {anyFailed ? 'The app couldn’t start. ' : ''}We’ll write a fix request for ProtoCode.
+                </p>
+              </div>
+            </div>
+
+            <div className="px-field">
+              <label htmlFor="user-note" className="px-label">What isn’t working?</label>
+              <input
+                id="user-note"
+                value={userNote}
+                onChange={(e) => setUserNote(e.target.value)}
+                placeholder="e.g. login button does nothing"
+                className="px-input"
+              />
+            </div>
+            <div className="px-field">
+              <label htmlFor="browser-error" className="px-label">Browser error <span className="px-label-hint">(optional)</span></label>
+              <textarea
+                id="browser-error"
+                value={browserError}
+                onChange={(e) => setBrowserError(e.target.value)}
+                rows={3}
+                placeholder="Blank page or “crashed”? Paste the logs, or a red error from the Console tab (Ctrl+Shift+I)."
+                className="px-textarea px-input-mono"
+                style={{ fontSize: 12 }}
+              />
+            </div>
+
+            <button className="px-btn px-btn-cta px-btn-block" onClick={handleFixPrompt} disabled={promptLoading || !status}>
+              {promptLoading ? <><span className="px-spinner" /> Writing the fix request…</> : 'Get fix prompt for ProtoCode'}
+            </button>
+
+            {promptError && <div className="px-alert px-alert-err">{promptError}</div>}
+            {showChoices && (
+              <div className="px-alert px-alert-warn">Nothing to go on yet. Describe what’s wrong or paste the error above, then try again.</div>
+            )}
+            {noIssue && (
+              <div className="px-alert px-alert-ok">No problem found. If something still looks off, describe it above.</div>
+            )}
+
+            {fixPrompt && (
+              <div className="px-stack" style={{ gap: 8 }}>
+                <label htmlFor="fix-prompt" className="px-sr-only">Fix prompt</label>
+                <textarea id="fix-prompt" readOnly value={fixPrompt} rows={6} className="px-textarea px-input-mono" style={{ fontSize: 12 }} />
+                <div className="px-row" style={{ gap: 10 }}>
+                  <button className="px-btn px-btn-primary px-btn-sm" onClick={handleCopy}>{copied ? 'Copied' : 'Copy prompt'}</button>
+                  <span className="px-small px-muted">Paste it into the ProtoCode chat, then send the project to ProtoTest again.</span>
+                </div>
+              </div>
+            )}
+          </aside>
         )}
       </div>
     </div>

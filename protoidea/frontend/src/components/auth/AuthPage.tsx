@@ -9,12 +9,6 @@ import AuthShell from './AuthShell'
 
 type Mode = 'login' | 'signup' | 'verify'
 
-const inputClass =
-  'w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400'
-const primaryButton =
-  'w-full rounded-xl bg-brand-teal text-white font-semibold py-2.5 hover:opacity-90 disabled:opacity-60 transition'
-const linkButton = 'font-semibold text-brand-teal hover:underline disabled:opacity-50 disabled:no-underline'
-
 export default function AuthPage() {
   const { signIn } = useAuth()
   const [mode, setMode] = useState<Mode>('login')
@@ -63,7 +57,7 @@ export default function AuthPage() {
       if (axios.isAxiosError(err) && err.response?.status === 403) {
         // Right password, but the email isn't verified yet: send a fresh code
         switchMode('verify')
-        toast('Please verify your email first. We sent you a new code.', { icon: '✉️' })
+        toast('Please verify your email first. We sent you a new code.')
         try {
           await resendVerification(email)
           setCooldown(60)
@@ -114,46 +108,53 @@ export default function AuthPage() {
   if (mode === 'verify') {
     return (
       <AuthShell>
-        <div className="text-4xl mb-3">✉️</div>
-        <h1 className="text-2xl font-bold text-gray-900">Check your email</h1>
-        <p className="text-sm text-gray-600 mt-2">
-          We sent a 6-digit code to <span className="font-semibold text-gray-900">{email}</span>.
-          It expires in 10 minutes.
-        </p>
-
-        <form onSubmit={handleVerify} className="mt-6 space-y-4">
+        <div className="px-stack">
+          <span className="px-empty-icon" style={{ width: 44, height: 44, borderRadius: 12, margin: 0 }} aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 7l9 6 9-6" />
+            </svg>
+          </span>
           <div>
-            <label htmlFor="code" className="block text-sm font-medium text-gray-700 mb-1">Verification code</label>
-            <input
-              id="code"
-              type="text"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              autoFocus
-              maxLength={6}
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-teal-400"
-              placeholder="••••••"
-            />
+            <h2 className="px-title" style={{ fontSize: 22 }}>Check your email</h2>
+            <p className="px-subtitle">
+              We sent a 6-digit code to <strong style={{ color: 'var(--text)' }}>{email}</strong>. It expires in 10 minutes.
+            </p>
           </div>
 
-          <button type="submit" disabled={loading || code.length !== 6} className={primaryButton}>
-            {loading ? 'Checking…' : 'Verify email'}
-          </button>
-        </form>
-
-        <div className="text-sm text-gray-500 text-center mt-6 space-y-2">
-          <p>
-            Didn't get it? Check spam, or{' '}
-            <button type="button" onClick={handleResend} disabled={loading || cooldown > 0} className={linkButton}>
-              {cooldown > 0 ? `send a new code in ${cooldown}s` : 'send a new code'}
+          <form onSubmit={handleVerify} className="px-stack">
+            <div className="px-field">
+              <label htmlFor="code" className="px-label">Verification code</label>
+              <input
+                id="code"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                autoFocus
+                maxLength={6}
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                className="px-input px-input-mono"
+                style={{ minHeight: 56, textAlign: 'center', fontSize: 26, fontWeight: 700, letterSpacing: '0.5em' }}
+                placeholder="••••••"
+              />
+            </div>
+            <button type="submit" disabled={loading || code.length !== 6} className="px-btn px-btn-cta px-btn-lg px-btn-block">
+              {loading ? <><span className="px-spinner" /> Checking…</> : 'Verify email'}
             </button>
-          </p>
-          <p>
-            Wrong email?{' '}
-            <button type="button" onClick={() => switchMode('signup')} className={linkButton}>Start over</button>
-          </p>
+          </form>
+
+          <div className="px-small px-muted" style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <p style={{ margin: 0 }}>
+              Didn’t get it? Check spam, or{' '}
+              <button type="button" onClick={handleResend} disabled={loading || cooldown > 0} className="px-link-btn">
+                {cooldown > 0 ? `send a new code in ${cooldown}s` : 'send a new code'}
+              </button>
+            </p>
+            <p style={{ margin: 0 }}>
+              Wrong email?{' '}
+              <button type="button" onClick={() => switchMode('signup')} className="px-link-btn">Start over</button>
+            </p>
+          </div>
         </div>
       </AuthShell>
     )
@@ -164,68 +165,70 @@ export default function AuthPage() {
 
   return (
     <AuthShell>
-      <h1 className="text-2xl font-bold text-gray-900">
-        {isSignup ? 'Create your account' : 'Log in to ProtoX'}
-      </h1>
-      <p className="text-sm text-gray-500 mt-1">
-        {isSignup ? 'Your ideas stay private to your account.' : 'Welcome back. Pick up where you left off.'}
-      </p>
-
-      <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+      <div className="px-stack">
         <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-          <input
-            id="email"
-            type="email"
-            required
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className={inputClass}
-            placeholder="you@example.com"
-          />
+          <h2 className="px-title" style={{ fontSize: 22 }}>{isSignup ? 'Create your account' : 'Log in'}</h2>
+          <p className="px-subtitle">
+            {isSignup ? 'Your ideas stay private to your account.' : 'Welcome back. Pick up where you left off.'}
+          </p>
         </div>
 
-        <div>
-          <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-          <input
-            id="password"
-            type="password"
-            required
-            autoComplete={isSignup ? 'new-password' : 'current-password'}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className={inputClass}
-            placeholder={isSignup ? 'At least 8 characters' : '••••••••'}
-          />
-        </div>
-
-        {isSignup && (
-          <div>
-            <label htmlFor="confirm" className="block text-sm font-medium text-gray-700 mb-1">Confirm password</label>
+        <form onSubmit={handleSubmit} className="px-stack">
+          <div className="px-field">
+            <label htmlFor="email" className="px-label">Email</label>
             <input
-              id="confirm"
-              type="password"
+              id="email"
+              type="email"
               required
-              autoComplete="new-password"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              className={inputClass}
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="px-input"
+              placeholder="you@example.com"
             />
           </div>
-        )}
 
-        <button type="submit" disabled={loading} className={primaryButton}>
-          {loading ? 'Please wait…' : isSignup ? 'Sign up' : 'Log in'}
-        </button>
-      </form>
+          <div className="px-field">
+            <label htmlFor="password" className="px-label">Password</label>
+            <input
+              id="password"
+              type="password"
+              required
+              autoComplete={isSignup ? 'new-password' : 'current-password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="px-input"
+              placeholder={isSignup ? 'At least 8 characters' : '••••••••'}
+            />
+          </div>
 
-      <p className="text-sm text-gray-500 text-center mt-6">
-        {isSignup ? 'Already have an account?' : "Don't have an account?"}{' '}
-        <button type="button" onClick={() => switchMode(isSignup ? 'login' : 'signup')} className={linkButton}>
-          {isSignup ? 'Log in' : 'Sign up'}
-        </button>
-      </p>
+          {isSignup && (
+            <div className="px-field">
+              <label htmlFor="confirm" className="px-label">Confirm password</label>
+              <input
+                id="confirm"
+                type="password"
+                required
+                autoComplete="new-password"
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                className="px-input"
+              />
+            </div>
+          )}
+
+          <button type="submit" disabled={loading} className="px-btn px-btn-cta px-btn-lg px-btn-block">
+            {loading ? <><span className="px-spinner" /> Please wait…</> : isSignup ? 'Create account' : 'Log in'}
+          </button>
+        </form>
+
+        <p className="px-small px-muted" style={{ margin: 0, textAlign: 'center' }}>
+          {isSignup ? 'Already have an account?' : 'New to ProtoX?'}{' '}
+          <button type="button" onClick={() => switchMode(isSignup ? 'login' : 'signup')} className="px-link-btn">
+            {isSignup ? 'Log in' : 'Create an account'}
+          </button>
+        </p>
+      </div>
     </AuthShell>
   )
 }

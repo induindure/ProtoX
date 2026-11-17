@@ -7,6 +7,7 @@ import App from './App'
 import { AuthProvider } from './components/auth/AuthContext'
 import AuthGate from './components/auth/AuthGate'
 import './index.css'
+import './protox.css'
 
 const queryClient = new QueryClient()
 
@@ -18,7 +19,18 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           <App />
         </AuthGate>
       </AuthProvider>
-      <Toaster position="top-right" />
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          style: {
+            background: 'var(--surface)',
+            color: 'var(--text)',
+            border: '1px solid var(--border)',
+            borderRadius: '12px',
+            fontSize: '14px',
+          },
+        }}
+      />
     </QueryClientProvider>
   </React.StrictMode>
 )

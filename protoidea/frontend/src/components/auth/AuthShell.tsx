@@ -1,18 +1,36 @@
 import type { ReactNode } from 'react'
 
+import Header, { LogoMark } from '../../protox/Header'
+
+const STEPS = ['Idea', 'Code', 'Test', 'Preview', 'Deploy']
+
 export default function AuthShell({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <header className="bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-3">
-          <span className="text-2xl font-black text-gray-900 tracking-tight">ProtoX</span>
-          <span className="text-sm font-semibold bg-brand-teal text-white px-2 py-0.5 rounded-full">ProtoIdea</span>
-        </div>
-        <div className="h-1 bg-brand-red w-full" />
-      </header>
+    <div className="px-page">
+      <Header minimal />
 
-      <main className="flex-1 flex items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md bg-white rounded-2xl shadow-md p-8">{children}</div>
+      <main className="px-hero" style={{ flex: 1, borderBottom: 0 }}>
+        <div className="px-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 32, paddingTop: 56 }}>
+          <div style={{ textAlign: 'center', maxWidth: 560 }}>
+            <div style={{ display: 'flex', justifyContent: 'center' }}><LogoMark size={56} /></div>
+            <h1 className="px-hero-title" style={{ marginTop: 16 }}>From idea to deployed app</h1>
+            <p className="px-hero-text" style={{ marginInline: 'auto' }}>
+              Generate, code, test, preview and deploy, all in one pipeline.
+            </p>
+            <div className="px-chips" style={{ justifyContent: 'center', marginTop: 16 }}>
+              {STEPS.map((s, i) => (
+                <span key={s} className="px-chip" style={{ fontWeight: 600, color: 'var(--muted)' }}>
+                  <span className="px-mono" style={{ color: 'var(--accent-text)' }}>{i + 1}</span>
+                  {s}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="px-card" style={{ width: '100%', maxWidth: 420, padding: 32 }}>
+            {children}
+          </div>
+        </div>
       </main>
     </div>
   )

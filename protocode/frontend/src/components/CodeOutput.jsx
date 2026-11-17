@@ -42,95 +42,26 @@ export default function CodeOutput({ file, allFiles, projectName }) {
   }
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-
-      {/* Toolbar */}
-      <div style={{
-        padding: '0.65rem 1.25rem',
-        borderBottom: '1px solid var(--border)',
-        background: '#fff',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: '1rem',
-      }}>
-        <span style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: '0.82rem',
-          color: 'var(--accent)',
-          fontWeight: 600,
-        }}>
+    <div className="px-pane" style={{ background: 'var(--code-bg)' }}>
+      <div className="px-pane-head">
+        <span className="px-mono" style={{ fontSize: 13, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
           {file ? file.path : 'Select a file'}
         </span>
-
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button
-            onClick={handleCopy}
-            disabled={!file}
-            style={{
-              padding: '0.35rem 0.9rem',
-              background: copied ? '#2d6a4f' : 'var(--surface2)',
-              color: copied ? '#fff' : 'var(--text)',
-              border: '1px solid var(--border)',
-              borderRadius: '5px',
-              fontSize: '0.8rem',
-              cursor: file ? 'pointer' : 'not-allowed',
-              fontWeight: 600,
-              transition: 'all 0.2s',
-            }}
-          >
-            {copied ? 'Copied' : 'Copy File'}
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          <button onClick={handleCopy} disabled={!file} className="px-btn px-btn-sm">
+            {copied ? 'Copied' : 'Copy'}
           </button>
-
-          <button
-            onClick={handleDownload}
-            disabled={downloading}
-            style={{
-              padding: '0.35rem 0.9rem',
-              background: 'transparent',
-              color: 'var(--accent)',
-              border: '1px solid var(--accent)',
-              borderRadius: '5px',
-              fontSize: '0.8rem',
-              cursor: downloading ? 'not-allowed' : 'pointer',
-              fontWeight: 700,
-              letterSpacing: '0.03em',
-            }}
-          >
-            {downloading ? 'Downloading...' : 'Download ZIP'}
+          <button onClick={handleDownload} disabled={downloading} className="px-btn px-btn-sm px-btn-outline">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" /></svg>
+            {downloading ? 'Preparing…' : 'Download ZIP'}
           </button>
         </div>
       </div>
 
-      {/* Code view */}
       {file ? (
-        <div style={{
-          flex: 1,
-          overflowY: 'auto',
-          background: '#fafafa',
-          padding: '1.5rem',
-        }}>
-          <pre style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: '0.83rem',
-            lineHeight: 1.9,
-            color: '#1a1a1a',
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-            margin: 0,
-          }}>
-            {file.content}
-          </pre>
-        </div>
+        <pre className="px-code px-code-wrap px-pane-body">{file.content}</pre>
       ) : (
-        <div style={{
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: 'var(--text-muted)',
-          fontSize: '0.88rem',
-        }}>
+        <div className="px-pane-body" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)' }}>
           Select a file from the tree to view its code.
         </div>
       )}

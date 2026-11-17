@@ -1,78 +1,40 @@
 import { useState } from 'react'
 
-const STATUS_CONFIG = {
-  pass: { color: '#16a34a', bg: '#dcfce7', icon: '✅' },
-  warn: { color: '#ca8a04', bg: '#fef9c3', icon: '⚠️' },
-  fail: { color: '#dc2626', bg: '#fee2e2', icon: '❌' },
-  skip: { color: '#475569', bg: '#f1f5f9', icon: '⏭️' },
+const STATUS = {
+  pass: { color: 'var(--ok)', label: 'OK' },
+  warn: { color: 'var(--warn)', label: 'Warning' },
+  fail: { color: 'var(--err)', label: 'Error' },
+  skip: { color: 'var(--faint)', label: 'Skipped' },
 }
 
 export default function FileResultCard({ result }) {
   const [open, setOpen] = useState(false)
-  const cfg = STATUS_CONFIG[result.syntax.status]
+  const cfg = STATUS[result.syntax.status] || STATUS.skip
+  const hasReview = Boolean(result.ai_feedback)
 
   return (
-    <div style={{
-      border: `1px solid ${cfg.color}33`,
-      borderRadius: '10px',
-      overflow: 'hidden',
-      background: '#fff',
-    }}>
-      <div
-        onClick={() => setOpen(o => !o)}
-        style={{
-          padding: '0.85rem 1.25rem',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.75rem',
-          cursor: 'pointer',
-          background: cfg.bg,
-        }}
+    <li style={{ borderTop: '1px solid var(--border)' }}>
+      <button
+        type="button"
+        onClick={() => hasReview && setOpen(o => !o)}
+        aria-expanded={hasReview ? open : undefined}
+        className="px-btn px-btn-ghost"
+        style={{ width: '100%', borderRadius: 0, justifyContent: 'flex-start', padding: '10px 20px', minHeight: 44, cursor: hasReview ? 'pointer' : 'default', textAlign: 'left' }}
       >
-        <span>{cfg.icon}</span>
-        <span style={{
-          fontFamily: 'monospace',
-          fontSize: '0.85rem',
-          fontWeight: 600,
-          color: '#1a1a1a',
-          flex: 1,
-        }}>
-          {result.path}
-        </span>
-        <span style={{ fontSize: '0.78rem', color: cfg.color, fontWeight: 600 }}>
+        <span className="px-dot" style={{ color: cfg.color }} aria-label={cfg.label} role="img" />
+        <span className="px-mono" style={{ flex: 1, minWidth: 0, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis' }}>{result.path}</span>
+        <span className="px-small" style={{ color: result.syntax.status === 'pass' ? 'var(--muted)' : cfg.color, fontWeight: result.syntax.status === 'pass' ? 400 : 600 }}>
           {result.syntax.message}
         </span>
-        <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>{open ? '▲' : '▼'}</span>
-      </div>
+        {hasReview && <span className="px-small" style={{ color: 'var(--faint)' }} aria-hidden="true">{open ? '−' : '+'}</span>}
+      </button>
 
-      {open && (
-        <div style={{
-          padding: '1rem 1.25rem',
-          borderTop: `1px solid ${cfg.color}33`,
-          background: '#fafafa',
-        }}>
-          <p style={{
-            fontSize: '0.75rem',
-            fontWeight: 700,
-            color: '#94a3b8',
-            textTransform: 'uppercase',
-            letterSpacing: '0.06em',
-            marginBottom: '0.5rem',
-          }}>
-            AI Review
-          </p>
-          <pre style={{
-            fontFamily: 'inherit',
-            fontSize: '0.85rem',
-            lineHeight: 1.7,
-            color: '#1a1a1a',
-            whiteSpace: 'pre-wrap',
-            margin: 0,
-          }}>
-            {result.ai_feedback}
-          </pre>
+      {open && hasReview && (
+        <div style={{ padding: '0 20px 14px 38px' }}>
+          <p className="px-section-label" style={{ marginBottom: 6 }}>AI review</p>
+          <p style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: 13 }}>{result.ai_feedback}</p>
         </div>
       )}
-    </div>
+    </li>
   )
 }

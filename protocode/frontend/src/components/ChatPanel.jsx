@@ -46,148 +46,78 @@ export default function ChatPanel({ onSend, onUndo, canUndo }) {
     }
   }
 
-  const bubble = (role) => ({
-    alignSelf: role === 'user' ? 'flex-end' : 'flex-start',
-    maxWidth: '92%',
-    padding: '0.55rem 0.8rem',
-    borderRadius: '8px',
-    fontSize: '0.83rem',
-    lineHeight: 1.5,
-    background:
-      role === 'user' ? 'var(--accent)' :
-      role === 'error' ? '#fef2f2' :
-      role === 'note' ? 'transparent' : 'var(--surface2)',
-    color:
-      role === 'user' ? '#fff' :
-      role === 'error' ? '#b91c1c' :
-      role === 'note' ? 'var(--text-muted)' : 'var(--text)',
-    border: role === 'assistant' ? '1px solid var(--border)' : 'none',
-    fontStyle: role === 'note' ? 'italic' : 'normal',
-  })
+  const bubbleClass = (role) =>
+    role === 'user' ? 'px-msg px-msg-user' :
+    role === 'error' ? 'px-msg px-msg-err' :
+    role === 'note' ? 'px-msg px-msg-note' : 'px-msg px-msg-bot'
 
   const pathList = (label, paths, color) =>
     paths?.length > 0 && (
-      <div style={{ marginTop: '0.5rem' }}>
-        <div style={{ fontSize: '0.72rem', fontWeight: 700, color, textTransform: 'uppercase' }}>
-          {label}
-        </div>
+      <div style={{ marginTop: 8 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
         {paths.map(p => (
-          <div key={p} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>{p}</div>
+          <div key={p} className="px-mono" style={{ fontSize: 12 }}>{p}</div>
         ))}
       </div>
     )
 
   return (
-    <div style={{
-      width: '340px',
-      flexShrink: 0,
-      display: 'flex',
-      flexDirection: 'column',
-      borderLeft: '1px solid var(--border)',
-      background: '#fff',
-      minHeight: 0,
-    }}>
-      <div style={{
-        padding: '0.65rem 1rem',
-        borderBottom: '1px solid var(--border)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-      }}>
-        <span style={{ fontWeight: 700, fontSize: '0.88rem' }}>Chat edit</span>
-        <button
-          onClick={undo}
-          disabled={!canUndo || busy}
-          style={{
-            padding: '0.25rem 0.7rem',
-            background: 'var(--surface2)',
-            border: '1px solid var(--border)',
-            borderRadius: '5px',
-            fontSize: '0.78rem',
-            fontWeight: 600,
-            cursor: canUndo && !busy ? 'pointer' : 'not-allowed',
-            opacity: canUndo && !busy ? 1 : 0.5,
-          }}
-        >
-          Undo
-        </button>
+    <aside className="px-pane" aria-label="Edit with chat" style={{ background: 'var(--surface)' }}>
+      <div className="px-pane-head">
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700 }}>
+          <span style={{ width: 26, height: 26, borderRadius: 8, background: 'var(--brand)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }} aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z" /></svg>
+          </span>
+          Edit with chat
+        </span>
+        <button onClick={undo} disabled={!canUndo || busy} className="px-btn px-btn-sm">Undo</button>
       </div>
 
-      <div style={{
-        flex: 1,
-        overflowY: 'auto',
-        padding: '1rem',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '0.6rem',
-        minHeight: 0,
-      }}>
+      <div className="px-pane-body" style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }} aria-live="polite">
         {messages.length === 0 && (
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>
-            Ask for a change, e.g. "make the Follow button call the API" or
-            "remove the hardcoded followers card".
+          <p className="px-small px-muted" style={{ margin: 0 }}>
+            Ask for a change, e.g. “make the Follow button call the API” or “remove the hardcoded followers card”.
           </p>
         )}
         {messages.map((m, i) => (
-          <div key={i} style={bubble(m.role)}>
+          <div key={i} className={bubbleClass(m.role)}>
             {m.text}
             {m.role === 'assistant' && (
               <>
-                {pathList('Changed', m.changed, '#166534')}
-                {pathList('New files', m.created, '#1d4ed8')}
+                {pathList('Changed', m.changed, 'var(--ok)')}
+                {pathList('New files', m.created, 'var(--accent-text)')}
                 {!m.changed?.length && !m.created?.length && (
-                  <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                    No files changed.
-                  </div>
+                  <div className="px-small" style={{ marginTop: 8, color: 'var(--muted)' }}>No files changed.</div>
                 )}
               </>
             )}
           </div>
         ))}
         {busy && (
-          <div style={bubble('note')}>Editing...</div>
+          <div className="px-msg px-msg-bot" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span className="px-spinner" /> Editing…
+          </div>
         )}
         <div ref={bottomRef} />
       </div>
 
-      <div style={{ padding: '0.75rem', borderTop: '1px solid var(--border)' }}>
+      <div style={{ padding: 12, borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <label htmlFor="chat-input" className="px-sr-only">Describe a change</label>
         <textarea
+          id="chat-input"
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={onKeyDown}
           disabled={busy}
           rows={3}
-          placeholder="Describe a change... (Enter to send)"
-          style={{
-            width: '100%',
-            boxSizing: 'border-box',
-            resize: 'none',
-            padding: '0.5rem 0.65rem',
-            border: '1px solid var(--border)',
-            borderRadius: '6px',
-            fontSize: '0.83rem',
-            fontFamily: 'inherit',
-          }}
+          placeholder="Describe a change… (Enter to send)"
+          className="px-textarea"
+          style={{ resize: 'none' }}
         />
-        <button
-          onClick={submit}
-          disabled={busy || !input.trim()}
-          style={{
-            marginTop: '0.5rem',
-            width: '100%',
-            padding: '0.5rem',
-            background: busy || !input.trim() ? '#ccc' : 'var(--accent)',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '6px',
-            fontWeight: 700,
-            fontSize: '0.83rem',
-            cursor: busy || !input.trim() ? 'not-allowed' : 'pointer',
-          }}
-        >
-          {busy ? 'Editing...' : 'Apply edit'}
+        <button onClick={submit} disabled={busy || !input.trim()} className="px-btn px-btn-primary px-btn-block">
+          {busy ? <><span className="px-spinner" /> Editing…</> : 'Apply edit'}
         </button>
       </div>
-    </div>
+    </aside>
   )
 }

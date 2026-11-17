@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 
+import Header, { Hero, CheckIcon, LogoMark } from './protox/Header'
+import { MODULE_URLS, withTheme } from './protox/theme'
 import IdeaForm from './components/IdeaForm'
 import IdeaCard from './components/IdeaCard'
 import HistoryPanel from './components/HistoryPanel'
@@ -10,6 +12,38 @@ import UserMenu from './components/auth/UserMenu'
 
 import { generateIdeas, refineIdea } from './api/ideas'
 import type { RankedIdea, IdeaRequest, IdeaResponse, IdeaModel } from './types'
+
+function EmptyState() {
+  return (
+    <div className="px-empty">
+      <div style={{ marginBottom: 16 }}><LogoMark size={56} /></div>
+      <h2>Your ideas will appear here</h2>
+      <p>Pick a domain and an app type, then generate. You’ll get 3–5 ranked ideas you can refine and send to ProtoCode.</p>
+    </div>
+  )
+}
+
+function LoadingState() {
+  return (
+    <div className="px-stack" aria-live="polite">
+      <div className="px-row" style={{ color: 'var(--accent-text)', fontWeight: 600 }}>
+        <span className="px-spinner" /> Generating ideas… this usually takes 5–10 seconds.
+      </div>
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="px-card px-stack">
+          <div className="px-skeleton" style={{ height: 18, width: '35%' }} />
+          <div className="px-skeleton" style={{ height: 12, width: '85%' }} />
+          <div className="px-skeleton" style={{ height: 12, width: '65%' }} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16 }}>
+            <div className="px-skeleton" style={{ height: 6 }} />
+            <div className="px-skeleton" style={{ height: 6 }} />
+            <div className="px-skeleton" style={{ height: 6 }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 export default function App() {
   const queryClient = useQueryClient()
@@ -25,7 +59,7 @@ export default function App() {
       setSelectedIdea(null)
       setRefiningIdea(null)
       queryClient.invalidateQueries({ queryKey: ['idea-history'] })
-      toast.success(`Generated ${data.ideas.length} ideas!`)
+      toast.success(`Generated ${data.ideas.length} ideas`)
     },
     onError: () => {
       toast.error('Failed to generate ideas. Check your API key and backend.')
@@ -34,7 +68,7 @@ export default function App() {
 
   const handleRefineIdea = async (feedback: string): Promise<IdeaModel> => {
     if (!refiningIdea) throw new Error('No idea to refine')
-    
+
     setRefinementLoading(true)
     try {
       const refined = await refineIdea({
@@ -45,12 +79,12 @@ export default function App() {
         current_target_users: refiningIdea.target_users,
         feedback,
       })
-      
+
       setRefiningIdea(refined.idea || refined)
-      toast.success('Idea refined! ✓')
+      toast.success('Idea refined')
       return refined.idea || refined
     } catch (error) {
-      toast.error('Failed to refine idea. Try again!')
+      toast.error('Failed to refine idea. Try again.')
       throw error
     } finally {
       setRefinementLoading(false)
@@ -58,99 +92,78 @@ export default function App() {
   }
 
   const handleFinalizeIdea = () => {
-    if (refiningIdea) {
-      const finalIdea = refiningIdea
+    if (!refiningIdea) return
+    const finalIdea = refiningIdea
 
-      setSelectedIdea({
-        idea: finalIdea,
-        scores: selectedIdea?.scores || { total: 0, feasibility: 0, novelty: 0, market_fit: 0 }
-      })
-      setRefiningIdea(null)
-      toast.success('Idea finalized! Opening ProtoCode...')
+    setSelectedIdea({
+      idea: finalIdea,
+      scores: selectedIdea?.scores || { total: 0, feasibility: 0, novelty: 0, market_fit: 0 },
+    })
+    setRefiningIdea(null)
+    toast.success('Idea finalized. Opening ProtoCode…')
 
-      // Encode idea as URL param and open protocode
-      const encoded = encodeURIComponent(JSON.stringify({
-        title: finalIdea.title,
-        description: finalIdea.description,
-        features: finalIdea.features,
-        tech_hints: finalIdea.tech_hints,
-        target_users: finalIdea.target_users,
-      }))
-      window.open(`http://localhost:5174?idea=${encoded}`, '_blank')
-    }
+    // Encode idea as URL param and open protocode (in the same theme)
+    const encoded = encodeURIComponent(JSON.stringify({
+      title: finalIdea.title,
+      description: finalIdea.description,
+      features: finalIdea.features,
+      tech_hints: finalIdea.tech_hints,
+      target_users: finalIdea.target_users,
+    }))
+    window.open(withTheme(`${MODULE_URLS.code}?idea=${encoded}`), '_blank')
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl font-black text-gray-900 tracking-tight">ProtoX</span>
-            <span className="text-sm font-semibold bg-brand-teal text-white px-2 py-0.5 rounded-full">ProtoIdea</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <p className="text-xs text-gray-400 hidden md:block">
-              K. J. Somaiya School of Engineering · B.Tech FYP 2025–27
-            </p>
-            <UserMenu />
-          </div>
-        </div>
-        <div className="h-1 bg-brand-red w-full" />
-      </header>
+    <div className="px-page">
+      <Header current={1}>
+        <UserMenu />
+      </Header>
 
-      <main className="max-w-6xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <Hero step={1} title="What should we build today?">
+        Describe the space and ProtoX suggests ranked, buildable app ideas you can refine and turn into code.
+      </Hero>
 
-        {/* Left column — Form + History */}
-        <div className="lg:col-span-1 space-y-6">
-          <IdeaForm
-            onSubmit={mutation.mutate}
-            loading={mutation.isPending}
-          />
+      <main className="px-container grid items-start gap-6 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
+        <aside className="px-stack-lg">
+          <IdeaForm onSubmit={mutation.mutate} loading={mutation.isPending} />
           <HistoryPanel
             onLoad={(record) => {
               setCurrentResult(record)
               setSelectedIdea(null)
-              toast('Loaded from history', { icon: '📂' })
+              setRefiningIdea(null)
+              toast.success('Loaded from history')
             }}
           />
-        </div>
+        </aside>
 
-        {/* Right column — Results */}
-        <div className="lg:col-span-2">
-          {!currentResult && !mutation.isPending && (
-            <div className="h-full flex flex-col items-center justify-center text-center py-24 text-gray-400">
-              <div className="text-5xl mb-4">💡</div>
-              <p className="text-lg font-semibold text-gray-500">Your ideas will appear here</p>
-              <p className="text-sm mt-1">Fill in the form and click Generate Ideas</p>
-            </div>
-          )}
+        <section className="min-w-0">
+          {!currentResult && !mutation.isPending && <EmptyState />}
 
-          {mutation.isPending && (
-            <div className="h-full flex flex-col items-center justify-center text-center py-24">
-              <svg className="animate-spin h-10 w-10 text-brand-teal mb-4" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-              </svg>
-              <p className="text-gray-500 font-medium">Generating ideas for you...</p>
-              <p className="text-xs text-gray-400 mt-1">This usually takes 5–10 seconds</p>
-            </div>
-          )}
+          {mutation.isPending && <LoadingState />}
 
           {currentResult && !mutation.isPending && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
+            <div className="px-stack">
+              <div className="px-between" style={{ alignItems: 'flex-end' }}>
                 <div>
-                  <h2 className="text-xl font-bold text-gray-800">
-                    {currentResult.ideas.length} Ideas for{' '}
-                    <span className="text-brand-teal">{currentResult.domain}</span>
+                  <h2 className="px-title" style={{ fontSize: 24 }}>
+                    {currentResult.ideas.length} ideas for <span className="px-gradient-text">{currentResult.domain}</span>
                   </h2>
-                  <p className="text-sm text-gray-400">App type: {currentResult.app_type}</p>
+                  <p className="px-subtitle">{currentResult.app_type} · ranked by overall score · pick one to refine</p>
                 </div>
-                {selectedIdea && !refiningIdea && (
-                  <div className="bg-teal-50 border border-brand-teal rounded-xl px-4 py-2 text-sm text-brand-teal font-semibold">
-                    ✓ "{selectedIdea.idea.title}" selected
-                  </div>
+
+                {refiningIdea ? (
+                  <button type="button" onClick={() => setRefiningIdea(null)} className="px-btn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M15 18l-6-6 6-6" />
+                    </svg>
+                    Back to ideas
+                  </button>
+                ) : (
+                  selectedIdea && (
+                    <span className="px-badge px-badge-ok">
+                      <CheckIcon /> {selectedIdea.idea.title} selected
+                    </span>
+                  )
                 )}
               </div>
 
@@ -162,38 +175,25 @@ export default function App() {
                   loading={refinementLoading}
                 />
               ) : (
-                <>
-                  <div className="space-y-4">
-                    {currentResult.ideas.map((ranked, i) => (
-                      <IdeaCard
-                        key={i}
-                        idea={ranked.idea}
-                        scores={ranked.scores}
-                        index={i}
-                        selected={selectedIdea?.idea.title === ranked.idea.title}
-                        onSelect={() => {
-                          setSelectedIdea(ranked)
-                          setRefiningIdea(ranked.idea)
-                        }}
-                      />
-                    ))}
-                  </div>
-
-                  {selectedIdea && (
-                    <div className="mt-6 bg-brand-teal text-white rounded-xl p-5 flex items-center justify-between">
-                      <div>
-                        <p className="font-bold text-base">Ready for ProtoCode</p>
-                        <p className="text-sm text-teal-100 mt-0.5">
-                          Select this idea and refine it to send it to ProtoCode.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </>
+                <div className="px-stack">
+                  {currentResult.ideas.map((ranked, i) => (
+                    <IdeaCard
+                      key={i}
+                      idea={ranked.idea}
+                      scores={ranked.scores}
+                      index={i}
+                      selected={selectedIdea?.idea.title === ranked.idea.title}
+                      onSelect={() => {
+                        setSelectedIdea(ranked)
+                        setRefiningIdea(ranked.idea)
+                      }}
+                    />
+                  ))}
+                </div>
               )}
             </div>
           )}
-        </div>
+        </section>
       </main>
     </div>
   )

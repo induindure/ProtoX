@@ -1,13 +1,17 @@
-function getFileIcon(name) {
-  if (name.endsWith('.jsx') || name.endsWith('.tsx')) return '◈'
-  if (name.endsWith('.js') || name.endsWith('.ts')) return '◇'
-  if (name.endsWith('.py')) return '◆'
-  if (name.endsWith('.css')) return '◎'
-  if (name.endsWith('.json')) return '❖'
-  if (name.endsWith('.md')) return '◉'
-  if (name.includes('.env')) return '◐'
-  if (name.endsWith('.html')) return '◑'
-  return '◇'
+function FileIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.7, flexShrink: 0 }} aria-hidden="true">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" />
+    </svg>
+  )
+}
+
+function FolderIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }} aria-hidden="true">
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    </svg>
+  )
 }
 
 function TreeNode({ name, node, path, onFileClick, selectedPath }) {
@@ -17,22 +21,9 @@ function TreeNode({ name, node, path, onFileClick, selectedPath }) {
 
   if (isFolder) {
     return (
-      <div style={{ marginBottom: '0.1rem' }}>
-        <div style={{
-          padding: '0.3rem 0.75rem',
-          fontSize: '0.75rem',
-          fontWeight: 700,
-          color: 'var(--text-muted)',
-          letterSpacing: '0.05em',
-          textTransform: 'uppercase',
-          marginTop: '0.6rem',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.4rem',
-        }}>
-          <span style={{ fontSize: '0.7rem' }}>▸</span> {name}
-        </div>
-        <div style={{ paddingLeft: '0.75rem', borderLeft: '1px solid var(--border)', marginLeft: '1rem' }}>
+      <li>
+        <div className="px-tree-folder"><FolderIcon /> {name}</div>
+        <ul className="px-tree">
           {Object.entries(node).map(([childName, childNode]) => (
             <TreeNode
               key={childName}
@@ -43,68 +34,45 @@ function TreeNode({ name, node, path, onFileClick, selectedPath }) {
               selectedPath={selectedPath}
             />
           ))}
-        </div>
-      </div>
+        </ul>
+      </li>
     )
   }
 
   return (
-    <div
-      onClick={() => onFileClick(fullPath)}
-      style={{
-        padding: '0.3rem 0.75rem',
-        borderRadius: '4px',
-        cursor: 'pointer',
-        fontSize: '0.83rem',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '0.5rem',
-        background: isSelected ? 'var(--accent)' : 'transparent',
-        color: isSelected ? '#fff' : 'var(--text)',
-        marginBottom: '1px',
-        transition: 'background 0.15s',
-        userSelect: 'none',
-      }}
-      onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = 'var(--surface2)' }}
-      onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
-    >
-      <span style={{ fontSize: '0.7rem', opacity: 0.7 }}>{getFileIcon(name)}</span>
-      {name}
-    </div>
+    <li>
+      <button
+        type="button"
+        onClick={() => onFileClick(fullPath)}
+        className={`px-tree-file ${isSelected ? 'is-selected' : ''}`}
+        aria-current={isSelected ? 'true' : undefined}
+      >
+        <FileIcon /> {name}
+      </button>
+    </li>
   )
 }
 
 export default function FileTree({ tree, onFileClick, selectedPath }) {
   return (
-    <div style={{
-      width: '220px',
-      minWidth: '220px',
-      background: 'var(--surface)',
-      borderRight: '1px solid var(--border)',
-      padding: '1rem 0.5rem',
-      overflowY: 'auto',
-    }}>
-      <p style={{
-        fontSize: '0.7rem',
-        color: 'var(--text-light)',
-        fontWeight: 700,
-        letterSpacing: '0.08em',
-        textTransform: 'uppercase',
-        padding: '0 0.75rem',
-        marginBottom: '0.75rem',
-      }}>
-        Project Files
-      </p>
-      {Object.entries(tree).map(([name, node]) => (
-        <TreeNode
-          key={name}
-          name={name}
-          node={node}
-          path=""
-          onFileClick={onFileClick}
-          selectedPath={selectedPath}
-        />
-      ))}
-    </div>
+    <nav className="px-pane" aria-label="Project files">
+      <div className="px-pane-head">
+        <span className="px-section-label">Project files</span>
+      </div>
+      <div className="px-pane-body" style={{ padding: 8 }}>
+        <ul className="px-tree">
+          {Object.entries(tree).map(([name, node]) => (
+            <TreeNode
+              key={name}
+              name={name}
+              node={node}
+              path=""
+              onFileClick={onFileClick}
+              selectedPath={selectedPath}
+            />
+          ))}
+        </ul>
+      </div>
+    </nav>
   )
 }

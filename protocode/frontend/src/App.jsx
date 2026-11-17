@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
+import Header, { Hero, CheckIcon } from './protox/Header'
+import { MODULE_URLS, withTheme } from './protox/theme'
 import IdeaPanel from './components/IdeaPanel'
 import TechSelector from './components/TechSelector'
 import DatabaseUrlInput from './components/DatabaseUrlInput'
@@ -46,7 +48,7 @@ export default function App() {
 
   const handleGenerate = async () => {
     if (!idea) return setError('No idea received from ProtoIdea yet.')
-    if (!techStack) return setError('Please select a tech stack.')
+    if (!techStack) return setError('Please choose an app type.')
     if (databaseUrlError) return setError(databaseUrlError)
     setError('')
     setLoading(true)
@@ -129,168 +131,80 @@ export default function App() {
         }),
       })
       const data = await response.json()
-      window.open(`http://localhost:5175/?id=${data.project_id}`, '_blank')
+      window.open(withTheme(`${MODULE_URLS.test}/?id=${data.project_id}`), '_blank')
     } catch {
       setError('Could not send project to ProtoTest.')
     }
   }
 
+  const blocked = loading || !idea || Boolean(databaseUrlError)
+
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div className="px-page">
+      <Header current={2} />
 
-      {/* Header */}
-      <header style={{
-        padding: '0.9rem 2rem',
-        borderBottom: '3px solid var(--accent)',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '1rem',
-        background: '#fff',
-      }}>
-        <span style={{ fontWeight: 800, fontSize: '1.2rem', color: '#1a1a1a', letterSpacing: '-0.5px' }}>
-          ProtoX
-        </span>
-        <span style={{
-          background: 'var(--accent)',
-          color: '#fff',
-          fontSize: '0.75rem',
-          fontWeight: 700,
-          padding: '0.2rem 0.6rem',
-          borderRadius: '999px',
-          letterSpacing: '0.03em',
-        }}>
-          ProtoCode
-        </span>
-        <span style={{ marginLeft: 'auto', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-          K. J. Somaiya School of Engineering · B.Tech FYP 2025–27
-        </span>
-      </header>
+      <Hero step={2} title="Generate project code">
+        Turn your refined idea into a working starter project, then edit it with chat.
+      </Hero>
 
-      {/* Input Section */}
-      <div style={{
-        padding: '2rem',
-        borderBottom: '1px solid var(--border)',
-        background: '#fff',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '1.5rem',
-        maxWidth: '860px',
-        width: '100%',
-        alignSelf: 'center',
-      }}>
-        <div>
-          <h2 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '0.3rem' }}>
-            Generate Project Code
-          </h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-            ProtoCode turns your refined idea into a working starter project.
-          </p>
-        </div>
+      <main className="px-container px-stack-lg">
+        <div className="px-row" style={{ alignItems: 'flex-start', gap: 20 }}>
+          <div style={{ flex: '1 1 340px', minWidth: 0 }}>
+            <IdeaPanel idea={idea} />
+          </div>
 
-        <IdeaPanel idea={idea} />
-        <TechSelector techStack={techStack} setTechStack={setTechStack} />
-        <DatabaseUrlInput databaseUrl={databaseUrl} setDatabaseUrl={setDatabaseUrl} />
-        <SupabaseGuide />
+          <section className="px-card px-stack-lg" style={{ flex: '1.4 1 460px', minWidth: 0 }}>
+            <TechSelector techStack={techStack} setTechStack={setTechStack} />
+            <DatabaseUrlInput databaseUrl={databaseUrl} setDatabaseUrl={setDatabaseUrl} />
+            <SupabaseGuide />
 
-        {error && (
-          <p style={{ color: 'var(--accent)', fontSize: '0.85rem', fontWeight: 500 }}>{error}</p>
-        )}
-
-        <button
-          onClick={handleGenerate}
-          disabled={loading || !idea || Boolean(databaseUrlError)}
-          style={{
-            alignSelf: 'flex-start',
-            padding: '0.65rem 2rem',
-            background: loading || !idea || databaseUrlError ? '#ccc' : 'var(--accent)',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '6px',
-            fontWeight: 700,
-            fontSize: '0.95rem',
-            cursor: loading || !idea || databaseUrlError ? 'not-allowed' : 'pointer',
-            letterSpacing: '0.03em',
-            transition: 'background 0.2s',
-          }}
-        >
-          {loading ? 'Generating...' : 'Generate Code'}
-        </button>
-      </div>
-
-      {/* Output Section */}
-      {result && (
-        <div ref={outputRef}>
-
-          {/* Send to ProtoTest banner */}
-          <div style={{
-            padding: '1rem 2rem',
-            background: '#f0fdf4',
-            borderBottom: '1px solid #bbf7d0',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '1.5rem',
-          }}>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#166534' }}>
-                Code generated successfully!{' '}
-                <span style={{ fontWeight: 400, fontSize: '0.85rem' }}>
-                  Next: send it to ProtoTest to run tests.
-                </span>
+            {error && (
+              <div className="px-alert px-alert-err" role="alert">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></svg>
+                {error}
               </div>
-              <div style={{ fontSize: '0.85rem', color: '#777', marginTop: '0.25rem' }}>
-                Want to deploy? Download the ZIP when you're happy with the final version. Made changes later? Download it again.
-              </div>
-            </div>
-            <button
-              onClick={handleSendToProtoTest}
-              style={{
-                padding: '0.6rem 1.6rem',
-                background: '#16a34a',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '6px',
-                fontWeight: 700,
-                fontSize: '0.9rem',
-                cursor: 'pointer',
-                letterSpacing: '0.03em',
-                boxShadow: '0 2px 8px rgba(22,163,74,0.35)',
-                transition: 'background 0.2s',
-                whiteSpace: 'nowrap',
-              }}
-              onMouseOver={e => e.target.style.background = '#15803d'}
-              onMouseOut={e => e.target.style.background = '#16a34a'}
-            >
-              Send to ProtoTest →
+            )}
+
+            <button onClick={handleGenerate} disabled={blocked} className="px-btn px-btn-cta px-btn-lg" style={{ alignSelf: 'flex-start' }}>
+              {loading ? (
+                <><span className="px-spinner" /> Generating code…</>
+              ) : (
+                <>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6" /></svg>
+                  Generate code
+                </>
+              )}
             </button>
-          </div>
-
-          {/* File viewer + chat */}
-          <div style={{
-            display: 'flex',
-            flex: 1,
-            overflow: 'hidden',
-            height: 'calc(100vh - 280px)',
-          }}>
-            <FileTree
-              tree={result.file_tree}
-              onFileClick={handleFileClick}
-              selectedPath={selectedFile?.path}
-            />
-            <CodeOutput
-              file={selectedFile}
-              allFiles={result.files}
-              projectName={result.project_name}
-            />
-            <ChatPanel
-              key={generation}  /* fresh chat for each new generation */
-              onSend={handleChatEdit}
-              onUndo={handleUndo}
-              canUndo={!!previousResult}
-            />
-          </div>
+          </section>
         </div>
-      )}
+
+        {result && (
+          <div ref={outputRef} className="px-stack" style={{ scrollMarginTop: 80 }}>
+            <div className="px-alert px-alert-ok px-between" style={{ alignItems: 'center' }}>
+              <div>
+                <p style={{ margin: 0, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <CheckIcon size={16} /> Code generated · {result.files.length} files
+                </p>
+                <p className="px-small" style={{ margin: '2px 0 0 24px', color: 'var(--muted)' }}>
+                  Next, run tests. Download the ZIP from the code panel whenever you’re happy with the final version.
+                </p>
+              </div>
+              <button onClick={handleSendToProtoTest} className="px-btn px-btn-cta">Send to ProtoTest →</button>
+            </div>
+
+            <section className="px-card px-card-flush px-workspace">
+              <FileTree tree={result.file_tree} onFileClick={handleFileClick} selectedPath={selectedFile?.path} />
+              <CodeOutput file={selectedFile} allFiles={result.files} projectName={result.project_name} />
+              <ChatPanel
+                key={generation}  /* fresh chat for each new generation */
+                onSend={handleChatEdit}
+                onUndo={handleUndo}
+                canUndo={!!previousResult}
+              />
+            </section>
+          </div>
+        )}
+      </main>
     </div>
   )
 }

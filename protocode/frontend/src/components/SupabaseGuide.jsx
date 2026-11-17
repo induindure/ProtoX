@@ -63,46 +63,31 @@ const steps = [
 
 export default function SupabaseGuide() {
   return (
-    <details style={{
-      border: '1px solid var(--border)',
-      borderRadius: '6px',
-      background: 'var(--surface2)',
-      padding: '0.6rem 0.9rem',
-    }}>
-      <summary style={{ cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
+    <details className="px-details">
+      <summary>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-text)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="10" /><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01" />
+        </svg>
         How do I get my Supabase database URL?
       </summary>
 
-      <ol style={{
-        margin: '0.75rem 0 0',
-        paddingLeft: '1.2rem',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '0.6rem',
-        fontSize: '0.83rem',
-        lineHeight: 1.5,
-      }}>
-        {steps.map((s, i) => (
-          <li key={i}>
-            <div style={{ fontWeight: 700 }}>{s.title}</div>
-            <div style={{ color: 'var(--text-muted)' }}>{s.body}</div>
-          </li>
-        ))}
-      </ol>
+      <div className="px-details-body">
+        <ol className="px-timeline">
+          {steps.map((s, i) => (
+            <li key={i}>
+              <div className="px-timeline-rail">
+                <span className="px-timeline-dot" style={{ background: 'var(--accent-soft)', color: 'var(--accent-text)' }}>{i + 1}</span>
+              </div>
+              <div className="px-timeline-body">
+                <p style={{ margin: '3px 0 2px', fontWeight: 700 }}>{s.title}</p>
+                <p className="px-small" style={{ margin: 0, color: 'var(--muted)' }}>{s.body}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
 
-      <div style={{ marginTop: '0.75rem', fontSize: '0.8rem' }}>
-        It should look like this:
-        <pre style={{
-          margin: '0.35rem 0 0',
-          padding: '0.5rem 0.7rem',
-          background: '#fff',
-          border: '1px solid var(--border)',
-          borderRadius: '5px',
-          fontFamily: 'var(--font-mono)',
-          fontSize: '0.75rem',
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-all',
-        }}>
+        <p className="px-small" style={{ margin: '4px 0 6px', fontWeight: 600 }}>It should look like this:</p>
+        <pre className="px-code px-code-wrap" style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', fontSize: 12 }}>
 {`postgresql://postgres.<project-ref>:<your-password>@aws-1-<region>.pooler.supabase.com:5432/postgres`}
         </pre>
       </div>

@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import Header, { Hero } from './protox/Header'
+import { MODULE_URLS, withTheme } from './protox/theme'
 import PreviewWindow from './PreviewWindow'
 
 export default function App() {
@@ -11,38 +13,27 @@ export default function App() {
   }, [])
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <header style={{
-        padding: '0.9rem 2rem',
-        borderBottom: '3px solid var(--accent, #e11d48)',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '1rem',
-        background: '#fff',
-      }}>
-        <span style={{ fontWeight: 800, fontSize: '1.2rem', color: '#1a1a1a', letterSpacing: '-0.5px' }}>
-          ProtoX
-        </span>
-        <span style={{
-          background: '#2563eb',
-          color: '#fff',
-          fontSize: '0.75rem',
-          fontWeight: 700,
-          padding: '0.2rem 0.6rem',
-          borderRadius: '999px',
-          letterSpacing: '0.03em',
-        }}>
-          Preview
-        </span>
-      </header>
+    <div className="px-page">
+      <Header current={4} />
 
-      {projectId ? (
-        <PreviewWindow projectId={projectId} />
-      ) : (
-        <div style={{ padding: '2rem', color: '#666' }}>
-          No project id found. Open this page from ProtoCode's "Preview App" button.
-        </div>
-      )}
+      <Hero step={4} title="Preview your app">
+        Your generated app running live. Try it out, and if something looks wrong we’ll write a fix request for ProtoCode.
+      </Hero>
+
+      <main className="px-container">
+        {projectId ? (
+          <PreviewWindow projectId={projectId} />
+        ) : (
+          <div className="px-empty">
+            <span className="px-empty-icon" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2" /><path d="M10 9l5 3-5 3z" /></svg>
+            </span>
+            <h2>No app to preview yet</h2>
+            <p>Run tests in ProtoTest and click “Preview app”. Your app will start here.</p>
+            <a href={withTheme(MODULE_URLS.test)} className="px-btn px-btn-outline" style={{ marginTop: 16 }}>Go to ProtoTest</a>
+          </div>
+        )}
+      </main>
     </div>
   )
 }

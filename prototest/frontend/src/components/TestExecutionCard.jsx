@@ -5,101 +5,53 @@ export default function TestExecutionCard({ execution }) {
 
   if (!execution.ran) {
     return (
-      <div style={{
-        border: '1px solid #fbbf2433',
-        borderRadius: '10px',
-        padding: '1rem 1.25rem',
-        background: '#fef9c3',
-        color: '#854d0e',
-      }}>
-        ⚠️ Tests did not run: {execution.reason}
+      <div className="px-alert px-alert-warn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /></svg>
+        <span><strong>Tests did not run.</strong> {execution.reason}</span>
       </div>
     )
   }
 
   const passed = execution.passed
-  const cfg = passed
-    ? { color: '#16a34a', bg: '#dcfce7', icon: '✅', label: 'Tests Passed' }
-    : { color: '#dc2626', bg: '#fee2e2', icon: '❌', label: 'Tests Failed' }
 
   return (
-    <div style={{
-      border: `1px solid ${cfg.color}33`,
-      borderRadius: '10px',
-      overflow: 'hidden',
-      background: '#fff',
-    }}>
-      <div style={{
-        padding: '0.85rem 1.25rem',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '0.75rem',
-        background: cfg.bg,
-      }}>
-        <span>{cfg.icon}</span>
-        <span style={{ fontWeight: 700, color: cfg.color, flex: 1 }}>{cfg.label}</span>
-        <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{execution.runner}</span>
+    <section className="px-card px-card-flush">
+      <div className="px-card-head">
+        <h2 className="px-h3" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span className={`px-badge ${passed ? 'px-badge-ok' : 'px-badge-err'}`}>{passed ? 'Passed' : 'Failed'}</span>
+          Test output
+        </h2>
+        <span className="px-mono px-small px-muted">{execution.runner}</span>
       </div>
 
       {execution.install_note && (
-        <div style={{ padding: '0.6rem 1.25rem', fontSize: '0.8rem', color: '#854d0e', background: '#fef9c3' }}>
-          <div>ℹ️ {execution.install_note}</div>
-          {execution.install_error && (
-            <pre style={{
-              fontSize: '0.75rem',
-              marginTop: '0.5rem',
-              marginBottom: 0,
-              background: '#fffbeb',
-              border: '1px solid #fde68a',
-              borderRadius: '6px',
-              padding: '0.6rem',
-              overflowX: 'auto',
-              whiteSpace: 'pre-wrap',
-              color: '#78350f',
-            }}>
-              {execution.install_error}
-            </pre>
-          )}
+        <div className="px-alert px-alert-warn" style={{ borderRadius: 0 }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div>{execution.install_note}</div>
+            {execution.install_error && (
+              <pre className="px-code px-code-wrap" style={{ marginTop: 8, padding: 10, borderRadius: 8, fontSize: 12, maxHeight: 220 }}>
+                {execution.install_error}
+              </pre>
+            )}
+          </div>
         </div>
       )}
 
-      <div style={{ padding: '1rem 1.25rem', borderTop: '1px solid var(--border)' }}>
-        <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
-          Test Output
-        </p>
-        <pre style={{
-          fontSize: '0.8rem',
-          background: '#fafafa',
-          padding: '0.75rem',
-          borderRadius: '6px',
-          overflowX: 'auto',
-          whiteSpace: 'pre-wrap',
-        }}>
-          {execution.stdout || execution.stderr || 'No output'}
-        </pre>
+      <pre className="px-code px-code-wrap" style={{ maxHeight: 420, fontSize: 12.5 }}>
+        {execution.stdout || execution.stderr || 'No output'}
+      </pre>
 
-        <button
-          onClick={() => setShowCode(s => !s)}
-          style={{ marginTop: '0.75rem', background: 'none', border: 'none', color: 'var(--accent)', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', padding: 0 }}
-        >
+      <div style={{ padding: '6px 20px', borderTop: '1px solid var(--border)' }}>
+        <button type="button" onClick={() => setShowCode(s => !s)} className="px-link-btn" aria-expanded={showCode}>
           {showCode ? 'Hide' : 'Show'} generated test code
         </button>
-
-        {showCode && (
-          <pre style={{
-            fontSize: '0.78rem',
-            background: '#1a1a1a',
-            color: '#e5e5e5',
-            padding: '0.75rem',
-            borderRadius: '6px',
-            overflowX: 'auto',
-            marginTop: '0.5rem',
-            whiteSpace: 'pre-wrap',
-          }}>
-            {execution.generated_test_code}
-          </pre>
-        )}
       </div>
-    </div>
+
+      {showCode && (
+        <pre className="px-code px-code-wrap" style={{ borderTop: '1px solid var(--border)', maxHeight: 480, fontSize: 12.5 }}>
+          {execution.generated_test_code}
+        </pre>
+      )}
+    </section>
   )
 }

@@ -19,58 +19,60 @@ export default function HistoryPanel({ onLoad }: Props) {
     mutationFn: deleteIdea,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['idea-history'] })
-      toast.success('Record deleted')
+      toast.success('Removed from history')
     },
     onError: () => toast.error('Failed to delete'),
   })
 
-  if (isLoading) return (
-    <div className="bg-white rounded-2xl shadow-md p-6">
-      <p className="text-sm text-gray-400 animate-pulse">Loading history...</p>
-    </div>
-  )
-
   const records = data?.records ?? []
 
   return (
-    <div className="bg-white rounded-2xl shadow-md p-6">
-      <h2 className="text-lg font-bold text-gray-800 mb-4">Past Generations</h2>
+    <section className="px-card" style={{ padding: '18px 18px 10px' }}>
+      <div className="px-between" style={{ marginBottom: 8 }}>
+        <h2 className="px-h3">Your history</h2>
+        <span className="px-small" style={{ color: 'var(--faint)' }}>Private to you</span>
+      </div>
 
-      {records.length === 0 ? (
-        <p className="text-sm text-gray-400">No history yet. Generate your first ideas above!</p>
+      {isLoading ? (
+        <div className="px-stack" style={{ gap: 8, paddingBottom: 8 }}>
+          <div className="px-skeleton" style={{ height: 44 }} />
+          <div className="px-skeleton" style={{ height: 44 }} />
+        </div>
+      ) : records.length === 0 ? (
+        <p className="px-small px-muted" style={{ margin: '4px 0 12px' }}>No history yet. Your generated ideas will be saved here.</p>
       ) : (
-        <ul className="space-y-3 max-h-96 overflow-y-auto pr-1">
-          {records.map(record => (
-            <li
-              key={record.record_id}
-              className="border border-gray-200 rounded-xl p-3 hover:border-teal-300 transition-all"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-gray-800 truncate">
-                    {record.domain} — {record.app_type}
-                  </p>
-                  <p className="text-xs text-gray-400 mt-0.5">{record.ideas.length} ideas · ID: {record.record_id.slice(0, 8)}…</p>
-                </div>
-                <div className="flex gap-2 flex-shrink-0">
-                  <button
-                    onClick={() => onLoad(record)}
-                    className="text-xs px-3 py-1 rounded-lg border border-brand-teal text-brand-teal hover:bg-teal-50 transition"
-                  >
-                    Load
-                  </button>
-                  <button
-                    onClick={() => deleteMutation.mutate(record.record_id)}
-                    className="text-xs px-3 py-1 rounded-lg border border-red-300 text-red-500 hover:bg-red-50 transition"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
+        <ul style={{ listStyle: 'none', margin: 0, padding: 0, maxHeight: 380, overflowY: 'auto' }}>
+          {records.map((record) => (
+            <li key={record.record_id} style={{ display: 'flex', alignItems: 'center', gap: 4, borderRadius: 10 }}>
+              <button
+                type="button"
+                onClick={() => onLoad(record)}
+                className="px-btn px-btn-ghost"
+                style={{ flex: 1, minWidth: 0, minHeight: 54, justifyContent: 'flex-start', textAlign: 'left', padding: '8px 10px' }}
+              >
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: 'block', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {record.domain} · {record.app_type}
+                  </span>
+                  <span className="px-small px-muted">{record.ideas.length} ideas</span>
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => deleteMutation.mutate(record.record_id)}
+                className="px-btn px-btn-ghost px-btn-danger"
+                style={{ minWidth: 40, padding: 0 }}
+                aria-label={`Delete ${record.domain} ${record.app_type} from history`}
+                title="Delete"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
+                </svg>
+              </button>
             </li>
           ))}
         </ul>
       )}
-    </div>
+    </section>
   )
 }

@@ -2,18 +2,15 @@ import { getDatabaseUrlError } from '../utils/databaseUrl'
 
 export default function DatabaseUrlInput({ databaseUrl, setDatabaseUrl }) {
   const validationError = databaseUrl ? getDatabaseUrlError(databaseUrl) : ''
+  const valid = databaseUrl && !validationError
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-      <label style={{
-        fontSize: '0.75rem',
-        color: 'var(--text-light)',
-        fontWeight: 700,
-        letterSpacing: '0.06em',
-        textTransform: 'uppercase',
-      }}>
-        Database URL (Required)
+    <div className="px-field">
+      <label htmlFor="database-url" className="px-label">
+        Database URL <span className="px-required">required</span>
       </label>
       <input
+        id="database-url"
         type="text"
         value={databaseUrl}
         required
@@ -22,26 +19,16 @@ export default function DatabaseUrlInput({ databaseUrl, setDatabaseUrl }) {
         aria-describedby="database-url-status"
         onChange={(e) => setDatabaseUrl(e.target.value)}
         placeholder="postgresql://user:password@host:5432/dbname"
-        style={{
-          padding: '0.6rem 0.85rem',
-          borderRadius: '8px',
-          border: '1px solid var(--border)',
-          fontSize: '0.85rem',
-          fontFamily: 'var(--font)',
-          maxWidth: '420px',
-          background: 'var(--surface)',
-          color: 'var(--text)',
-        }}
+        spellCheck={false}
+        autoComplete="off"
+        className="px-input px-input-mono"
       />
       <span
         id="database-url-status"
         role={validationError ? 'alert' : 'status'}
-        style={{
-          color: validationError ? 'var(--accent)' : 'var(--text-muted)',
-          fontSize: '0.8rem',
-        }}
+        className={`px-help ${validationError ? 'is-err' : valid ? 'is-ok' : ''}`}
       >
-        {validationError || (databaseUrl ? 'URL format looks valid.' : 'Enter a database connection URL.')}
+        {validationError || (valid ? 'URL format looks valid.' : 'Enter a database connection URL.')}
       </span>
     </div>
   )

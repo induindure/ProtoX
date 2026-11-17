@@ -11,47 +11,48 @@ function describeIteration(it) {
   return (it.test_execution && it.test_execution.reason) || 'Stopped'
 }
 
+function iterationPassed(it) {
+  return it.fix_type === 'test' && it.test_execution && it.test_execution.ran && it.test_execution.passed
+}
+
 export default function FixHistoryCard({ data }) {
-  const cfg = data.success
-    ? {
-        color: '#16a34a',
-        bg: '#dcfce7',
-        icon: '✅',
-        label: `All checks passed after ${data.attempts_used} attempt${data.attempts_used === 1 ? '' : 's'}`,
-      }
-    : {
-        color: '#dc2626',
-        bg: '#fee2e2',
-        icon: '⚠️',
-        label: `Still failing after ${data.attempts_used} attempt${data.attempts_used === 1 ? '' : 's'} - Get the fixed prompt and paste into ProtoCode's chatbot`,
-      }
+  const attempts = `${data.attempts_used} attempt${data.attempts_used === 1 ? '' : 's'}`
 
   return (
-    <div style={{
-      border: `1px solid ${cfg.color}33`,
-      borderRadius: '10px',
-      overflow: 'hidden',
-      background: '#fff',
-      marginBottom: '0.75rem',
-    }}>
-      <div style={{
-        padding: '0.85rem 1.25rem',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '0.75rem',
-        background: cfg.bg,
-      }}>
-        <span>{cfg.icon}</span>
-        <span style={{ fontWeight: 700, color: cfg.color }}>{cfg.label}</span>
+    <section className="px-card px-stack">
+      <div className="px-between">
+        <h2 className="px-h3">Auto-fix history</h2>
+        <span className={`px-badge ${data.success ? 'px-badge-ok' : 'px-badge-err'}`}>
+          {data.success ? `Passed after ${attempts}` : `Still failing after ${attempts}`}
+        </span>
       </div>
 
-      <div style={{ padding: '1rem 1.25rem', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-        {data.iterations.map((it) => (
-          <div key={it.attempt} style={{ fontSize: '0.85rem', color: 'var(--text)' }}>
-            <strong>Attempt {it.attempt}:</strong> {describeIteration(it)}
-          </div>
-        ))}
-      </div>
-    </div>
+      {!data.success && (
+        <div className="px-alert px-alert-warn">
+          Use “Get fix prompt for ProtoCode” above and paste it into ProtoCode’s chat.
+        </div>
+      )}
+
+      <ol className="px-timeline">
+        {data.iterations.map((it) => {
+          const ok = iterationPassed(it)
+          return (
+            <li key={it.attempt}>
+              <div className="px-timeline-rail">
+                <span
+                  className="px-timeline-dot"
+                  style={{ background: ok ? 'var(--ok-soft)' : 'var(--warn-soft)', color: ok ? 'var(--ok)' : 'var(--warn)' }}
+                >
+                  {it.attempt}
+                </span>
+              </div>
+              <div className="px-timeline-body">
+                <p style={{ margin: '3px 0 0', fontWeight: 600 }}>{describeIteration(it)}</p>
+              </div>
+            </li>
+          )
+        })}
+      </ol>
+    </section>
   )
 }

@@ -1,66 +1,41 @@
-export default function SummaryBar({ summary, projectName, techStack }) {
-  const total = summary.total
+export default function SummaryBar({ summary }) {
   const testsPassed = summary.tests_passed
-
-  const pill = (label, count, bg, color) => (
-    <div style={{
-      padding: '0.4rem 1rem',
-      borderRadius: '999px',
-      background: bg,
-      color,
-      fontWeight: 700,
-      fontSize: '0.85rem',
-      display: 'flex',
-      gap: '0.4rem',
-      alignItems: 'center',
-    }}>
-      <span>{label}</span>
-      <span style={{
-        background: 'rgba(0,0,0,0.12)',
-        borderRadius: '999px',
-        padding: '0 0.45rem',
-        fontSize: '0.8rem',
-      }}>{count}</span>
-    </div>
-  )
+  const syntaxOk = summary.syntax_failed === 0
 
   return (
-    <div style={{
-      background: '#fff',
-      borderBottom: '1px solid var(--border)',
-      padding: '1.5rem 2rem',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '1rem',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+    <div className="px-stats">
+      <div className="px-card" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <span
+          style={{
+            width: 48, height: 48, borderRadius: 999, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: testsPassed ? 'var(--ok-soft)' : 'var(--err-soft)', color: testsPassed ? 'var(--ok)' : 'var(--err)',
+          }}
+          aria-hidden="true"
+        >
+          {testsPassed ? (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12l5 5L20 7" /></svg>
+          ) : (
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+          )}
+        </span>
         <div>
-          <h2 style={{ fontSize: '1.2rem', fontWeight: 800, margin: 0 }}>{projectName}</h2>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{techStack}</span>
-        </div>
-
-        <div style={{
-          width: '72px',
-          height: '72px',
-          borderRadius: '50%',
-          background: testsPassed ? '#dcfce7' : '#fee2e2',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          border: `3px solid ${testsPassed ? '#16a34a' : '#dc2626'}`,
-        }}>
-          <span style={{ fontSize: '1.3rem' }}>{testsPassed ? '✅' : '❌'}</span>
-          <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-            {testsPassed ? 'PASS' : 'FAIL'}
-          </span>
+          <p className="px-stat-label">Result</p>
+          <p className="px-stat-value" style={{ color: testsPassed ? 'var(--ok)' : 'var(--err)' }}>
+            {testsPassed ? 'All passing' : 'Tests failing'}
+          </p>
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
-        {pill('📄 Files', total, '#f1f5f9', '#475569')}
-        {pill('❌ Syntax errors', summary.syntax_failed, summary.syntax_failed > 0 ? '#fee2e2' : '#dcfce7', summary.syntax_failed > 0 ? '#991b1b' : '#166534')}
-        {pill(testsPassed ? '✅ Tests passed' : '❌ Tests failed', '', testsPassed ? '#dcfce7' : '#fee2e2', testsPassed ? '#166534' : '#991b1b')}
+      <div className="px-card">
+        <p className="px-stat-label">Syntax errors</p>
+        <p className="px-stat-value" style={{ color: syntaxOk ? 'var(--text)' : 'var(--err)' }}>
+          {summary.syntax_failed} <small>in {summary.total} files</small>
+        </p>
+      </div>
+
+      <div className="px-card">
+        <p className="px-stat-label">Files</p>
+        <p className="px-stat-value">{summary.total} <small>checked</small></p>
       </div>
     </div>
   )

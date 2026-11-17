@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 const C = ({ children }: { children: ReactNode }) => (
-  <code className="rounded bg-gray-200 px-1">{children}</code>
+  <code className="px-mono" style={{ padding: "1px 6px", borderRadius: 6, background: "var(--surface)", border: "1px solid var(--border)" }}>{children}</code>
 );
 
 const steps: { title: string; body: ReactNode }[] = [
@@ -74,32 +74,38 @@ const steps: { title: string; body: ReactNode }[] = [
 
 export default function GithubTokenGuide() {
   return (
-    <details className="rounded border bg-gray-50 p-3">
-      <summary className="cursor-pointer text-sm font-semibold">
+    <details className="px-details">
+      <summary>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-text)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="10" /><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01" />
+        </svg>
         How do I get a GitHub token?
       </summary>
 
-      <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm">
-        {steps.map((s, i) => (
-          <li key={i}>
-            <div className="font-bold">{s.title}</div>
-            <div className="text-gray-600">{s.body}</div>
-          </li>
-        ))}
-      </ol>
+      <div className="px-details-body">
+        <div className="px-alert px-alert-info" style={{ marginBottom: 14 }}>
+          <span>
+            <strong>Shortcut:</strong> this link opens GitHub’s form with the name and both scopes filled in. Check they’re ticked before generating.{" "}
+            <a href="https://github.com/settings/tokens/new?scopes=repo,workflow&description=ProtoDeploy" target="_blank" rel="noreferrer" style={{ fontWeight: 700 }}>
+              Create token ↗
+            </a>
+          </span>
+        </div>
 
-      <p className="mt-3 text-xs">
-        Shortcut: this link opens the form with the name and both scopes already filled in
-        (check they are ticked before generating):{" "}
-        <a
-          className="text-blue-600 underline"
-          href="https://github.com/settings/tokens/new?scopes=repo,workflow&description=ProtoDeploy"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Create token
-        </a>
-      </p>
+        <ol className="px-timeline">
+          {steps.map((s, i) => (
+            <li key={i}>
+              <div className="px-timeline-rail">
+                <span className="px-timeline-dot" style={{ background: "var(--accent-soft)", color: "var(--accent-text)" }}>{i + 1}</span>
+              </div>
+              <div className="px-timeline-body">
+                <p style={{ margin: "3px 0 2px", fontWeight: 700 }}>{s.title}</p>
+                <p className="px-small" style={{ margin: 0, color: "var(--muted)" }}>{s.body}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </div>
     </details>
   );
 }

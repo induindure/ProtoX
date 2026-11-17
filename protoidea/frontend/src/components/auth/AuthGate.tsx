@@ -7,7 +7,11 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth()
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center text-gray-400">Loading…</div>
+    return (
+      <div className="px-page" style={{ alignItems: 'center', justifyContent: 'center', gap: 10, flexDirection: 'row', color: 'var(--muted)' }}>
+        <span className="px-spinner" /> Loading…
+      </div>
+    )
   }
 
   if (!user) return <AuthPage />

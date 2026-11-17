@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import Header, { Hero, CheckIcon } from './protox/Header'
+import { MODULE_URLS, withTheme } from './protox/theme'
 import { runTests, autoFix } from './api/prototest'
 import SummaryBar from './components/SummaryBar'
 import FileResultCard from './components/FileResultCard'
@@ -62,7 +64,7 @@ export default function App() {
       })
       if (!response.ok) throw new Error()
       const data = await response.json()
-      window.open(`http://localhost:5176/?id=${data.project_id}`, '_blank')
+      window.open(withTheme(`${MODULE_URLS.preview}/?id=${data.project_id}`), '_blank')
     } catch {
       setError('Could not send project to Preview.')
     }
@@ -82,7 +84,7 @@ export default function App() {
       if (!response.ok) throw new Error()
       const data = await response.json()
       const name = encodeURIComponent(project.project_name)
-      window.open(`http://localhost:5180/?id=${data.project_id}&name=${name}`, '_blank')
+      window.open(withTheme(`${MODULE_URLS.deploy}/?id=${data.project_id}&name=${name}`), '_blank')
     } catch {
       setError('Could not send project to ProtoDeploy. Is its backend running on port 8010?')
     }
@@ -164,237 +166,111 @@ export default function App() {
     report.summary.syntax_failed === 0 &&
     report.test_execution?.passed === true
 
+  const busy = loading || autoFixing
+
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
+    <div className="px-page">
+      <Header current={3} />
 
-      {/* Header */}
-      <header style={{
-        padding: '0.9rem 2rem',
-        borderBottom: '3px solid var(--accent)',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '1rem',
-        background: '#fff',
-      }}>
-        <span style={{ fontWeight: 800, fontSize: '1.2rem', color: 'var(--text)', letterSpacing: '-0.5px' }}>
-          ProtoX
-        </span>
-        <span style={{
-          background: 'var(--accent)',
-          color: '#fff',
-          fontSize: '0.75rem',
-          fontWeight: 700,
-          padding: '0.2rem 0.6rem',
-          borderRadius: '999px',
-        }}>
-          ProtoTest
-        </span>
-        <span style={{ marginLeft: 'auto', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-          K. J. Somaiya School of Engineering · B.Tech FYP 2025–27
-        </span>
-      </header>
+      <Hero step={3} title="Test generated code">
+        Checks every file for syntax errors, then runs real automated tests against your project.
+      </Hero>
 
-      {/* Input section */}
-      <div style={{
-        padding: '2rem',
-        background: '#fff',
-        borderBottom: '1px solid var(--border)',
-        maxWidth: '860px',
-        width: '100%',
-        alignSelf: 'center',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '1rem',
-      }}>
-        <div>
-          <h2 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '0.3rem' }}>
-            Test Generated Code
-          </h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-            ProtoTest checks your generated project for syntax errors and runs real automated tests against it.
-          </p>
-        </div>
-
+      <main className="px-container px-container-narrow px-stack-lg">
         {project ? (
-          <div style={{
-            padding: '0.85rem 1.25rem',
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: '8px',
-            fontSize: '0.88rem',
-            color: 'var(--text)',
-          }}>
-            <strong>{project.project_name}</strong>
-            <span style={{ color: 'var(--text-muted)', marginLeft: '0.75rem' }}>{project.tech_stack}</span>
-            <span style={{ color: 'var(--text-muted)', marginLeft: '0.75rem' }}>· {project.files.length} files</span>
-          </div>
-        ) : (
-          <div style={{
-            padding: '0.85rem 1.25rem',
-            background: '#fef9c3',
-            borderRadius: '8px',
-            fontSize: '0.88rem',
-            color: '#854d0e',
-          }}>
-            ⚠️ No project received. Please go back to ProtoCode and click "Send to ProtoTest".
-          </div>
-        )}
+          <div className="px-card px-between" style={{ padding: '14px 18px' }}>
+            <div className="px-row" style={{ gap: 10 }}>
+              <span style={{ fontWeight: 700, fontSize: 16 }}>{project.project_name}</span>
+              <span className="px-badge px-badge-neutral">{project.tech_stack}</span>
+              <span className="px-small px-muted">{project.files.length} files</span>
+            </div>
 
-        {error && <p style={{ color: 'var(--accent)', fontSize: '0.85rem', fontWeight: 500 }}>{error}</p>}
-
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
-          <button
-            onClick={handleTest}
-            disabled={loading || autoFixing || !project}
-            style={{
-              alignSelf: 'flex-start',
-              padding: '0.65rem 2rem',
-              background: loading || autoFixing || !project ? '#ccc' : 'var(--accent)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '6px',
-              fontWeight: 700,
-              fontSize: '0.95rem',
-              cursor: loading || autoFixing || !project ? 'not-allowed' : 'pointer',
-              transition: 'background 0.2s',
-            }}
-          >
-            {loading ? 'Running Tests...' : 'Run Tests'}
-          </button>
-
-          {testsPassed && (
-            <>
-              <button
-                onClick={handleSendToPreview}
-                disabled={!project}
-                style={{
-                  padding: '0.5rem 1.4rem',
-                  background: '#2563eb',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '6px',
-                  fontWeight: 700,
-                  fontSize: '0.85rem',
-                  cursor: project ? 'pointer' : 'not-allowed',
-                  opacity: project ? 1 : 0.5,
-                  letterSpacing: '0.03em',
-                  transition: 'background 0.2s',
-                }}
-                onMouseOver={e => { if (project) e.target.style.background = '#1d4ed8' }}
-                onMouseOut={e => { e.target.style.background = '#2563eb' }}
-              >
-                Preview App →
+            <div className="px-row" style={{ gap: 8 }}>
+              <button onClick={handleTest} disabled={busy || !project} className={`px-btn ${report ? '' : 'px-btn-cta'}`}>
+                {loading ? <><span className="px-spinner" /> Running tests…</> : report ? 'Run tests again' : 'Run tests'}
               </button>
 
-              <button
-                onClick={handleSendToDeploy}
-                disabled={!project}
-                style={{
-                  padding: '0.5rem 1.4rem',
-                  background: '#16a34a',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '6px',
-                  fontWeight: 700,
-                  fontSize: '0.85rem',
-                  cursor: project ? 'pointer' : 'not-allowed',
-                  opacity: project ? 1 : 0.5,
-                  letterSpacing: '0.03em',
-                  transition: 'background 0.2s',
-                }}
-                onMouseOver={e => { if (project) e.target.style.background = '#15803d' }}
-                onMouseOut={e => { e.target.style.background = '#16a34a' }}
-              >
-                Deploy →
-              </button>
-            </>
-          )}
+              {hasFailures && (
+                <button onClick={handleAutoFix} disabled={busy || !project} className="px-btn px-btn-cta">
+                  {autoFixing ? <><span className="px-spinner" /> Fixing &amp; retesting…</> : 'Auto-fix & retest'}
+                </button>
+              )}
+              {hasFailures && (
+                <button onClick={handleFixPrompt} disabled={promptLoading || !project} className="px-btn px-btn-outline">
+                  {promptLoading ? <><span className="px-spinner" /> Writing prompt…</> : 'Get fix prompt for ProtoCode'}
+                </button>
+              )}
 
-          {hasFailures && (
-            <button
-              onClick={handleAutoFix}
-              disabled={loading || autoFixing || !project}
-              style={{
-                alignSelf: 'flex-start',
-                padding: '0.65rem 2rem',
-                background: loading || autoFixing || !project ? '#ccc' : 'transparent',
-                color: loading || autoFixing || !project ? '#fff' : 'var(--accent)',
-                border: '2px solid var(--accent)',
-                borderRadius: '6px',
-                fontWeight: 700,
-                fontSize: '0.95rem',
-                cursor: loading || autoFixing || !project ? 'not-allowed' : 'pointer',
-                transition: 'background 0.2s',
-              }}
-            >
-              {autoFixing ? 'Fixing & Retesting...' : 'Auto-Fix & Retest'}
-            </button>
-          )}
-          {hasFailures && (
-            <button
-              onClick={handleFixPrompt}
-              disabled={promptLoading || !project}
-              style={{
-                alignSelf: 'flex-start',
-                padding: '0.65rem 1.4rem',
-                background: promptLoading ? '#ccc' : '#7c3aed',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '6px',
-                fontWeight: 700,
-                fontSize: '0.9rem',
-                cursor: promptLoading ? 'not-allowed' : 'pointer',
-              }}
-            >
-              {promptLoading ? 'Writing prompt...' : 'Get fix prompt for ProtoCode'}
-            </button>
-          )}
-        </div>
-        {fixPrompt && (
-          <div style={{
-            border: '1px solid var(--border)',
-            borderRadius: '8px',
-            padding: '1rem',
-            background: 'var(--surface)',
-          }}>
-            <textarea
-              readOnly
-              value={fixPrompt}
-              rows={6}
-              style={{ width: '100%', fontSize: '0.88rem', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--border)' }}
-            />
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '0.6rem' }}>
-              <button
-                onClick={handleCopyPrompt}
-                style={{ padding: '0.45rem 1.1rem', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 700, cursor: 'pointer' }}
-              >
-                {copied ? 'Copied' : 'Copy prompt'}
-              </button>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                Paste into the ProtoCode chat, then click Send to ProtoTest again.
-              </span>
+              {testsPassed && (
+                <>
+                  <button onClick={handleSendToPreview} disabled={!project} className="px-btn px-btn-outline">Preview app →</button>
+                  <button onClick={handleSendToDeploy} disabled={!project} className="px-btn px-btn-cta">Deploy →</button>
+                </>
+              )}
             </div>
           </div>
+        ) : (
+          <div className="px-empty" style={{ padding: '40px 24px' }}>
+            <span className="px-empty-icon" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>
+            </span>
+            <h2>No project received yet</h2>
+            <p>Generate code in ProtoCode and click “Send to ProtoTest”. Your project will open here.</p>
+            <a href={withTheme(MODULE_URLS.code)} className="px-btn px-btn-outline" style={{ marginTop: 16 }}>Go to ProtoCode</a>
+          </div>
         )}
-      </div>
 
-      {/* Results */}
-      {report && (
-        <div style={{ maxWidth: '860px', width: '100%', alignSelf: 'center', padding: '0 0 3rem' }}>
-          <SummaryBar
-            summary={report.summary}
-            projectName={report.project_name}
-            techStack={report.tech_stack}
-          />
-          <div style={{ padding: '1.5rem 2rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+        {error && (
+          <div className="px-alert px-alert-err" role="alert">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></svg>
+            {error}
+          </div>
+        )}
+
+        {testsPassed && (
+          <div className="px-alert px-alert-ok">
+            <CheckIcon size={18} />
+            <span><strong>Your app is ready to try.</strong> See it running live, or put it online.</span>
+          </div>
+        )}
+
+        {fixPrompt && (
+          <section className="px-card px-stack">
+            <div>
+              <h2 className="px-h3">Fix prompt for ProtoCode</h2>
+              <p className="px-subtitle px-small">Paste it into the ProtoCode chat, then click Send to ProtoTest again.</p>
+            </div>
+            <label htmlFor="fix-prompt" className="px-sr-only">Fix prompt</label>
+            <textarea id="fix-prompt" readOnly value={fixPrompt} rows={6} className="px-textarea px-input-mono" />
+            <div>
+              <button onClick={handleCopyPrompt} className="px-btn px-btn-primary">
+                {copied ? <><CheckIcon /> Copied</> : 'Copy prompt'}
+              </button>
+            </div>
+          </section>
+        )}
+
+        {report && (
+          <div className="px-stack">
+            <SummaryBar summary={report.summary} projectName={report.project_name} techStack={report.tech_stack} />
             {fixHistory && <FixHistoryCard data={fixHistory} />}
             <TestExecutionCard execution={report.test_execution} />
-            {report.syntax_results.map((r) => (
-              <FileResultCard key={r.path} result={r} />
-            ))}
+            <section className="px-card px-card-flush">
+              <div className="px-card-head">
+                <h2 className="px-h3">Files checked</h2>
+                <span className="px-small px-muted">
+                  {report.syntax_results.length - report.summary.syntax_failed} of {report.syntax_results.length} OK
+                </span>
+              </div>
+              <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                {report.syntax_results.map((r) => (
+                  <FileResultCard key={r.path} result={r} />
+                ))}
+              </ul>
+            </section>
           </div>
-        </div>
-      )}
+        )}
+      </main>
     </div>
   )
 }

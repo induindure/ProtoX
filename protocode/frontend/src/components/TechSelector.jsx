@@ -1,69 +1,33 @@
 const STACKS = [
-  {
-    value: 'React + FastAPI',
-    label: 'React + FastAPI',
-    tagline: 'Fast & modern - great for apps that need quick responses',
-  },
-
-  {
-    value: 'React + Django',
-    label: 'React + Django',
-    tagline: 'Best for apps that handle users, logins & databases',
-  },
-  {
-    value: 'Vue + FastAPI',
-    label: 'Vue + FastAPI',
-    tagline: 'Simple & beginner-friendly frontend with a speedy backend',
-  },
+  { value: 'React + FastAPI', title: 'Fast & modern', tagline: 'Great for apps that need quick responses' },
+  { value: 'React + Django', title: 'Users & data', tagline: 'Best for apps with logins & databases' },
+  { value: 'Vue + FastAPI', title: 'Simple & friendly', tagline: 'Beginner-friendly frontend, speedy backend' },
 ]
 
 export default function TechSelector({ techStack, setTechStack }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-      <label style={{
-        fontSize: '0.75rem',
-        color: 'var(--text-light)',
-        fontWeight: 700,
-        letterSpacing: '0.06em',
-        textTransform: 'uppercase',
-      }}>
-        Choose Your App Type
-      </label>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxWidth: '420px' }}>
-        {STACKS.map(stack => (
-          <div
-            key={stack.value}
-            onClick={() => setTechStack(stack.value)}
-            style={{
-              padding: '0.75rem 1rem',
-              borderRadius: '8px',
-              border: `1px solid ${techStack === stack.value ? 'var(--accent)' : 'var(--border)'}`,
-              background: techStack === stack.value ? 'var(--surface-active, rgba(99,102,241,0.08))' : 'var(--surface)',
-              cursor: 'pointer',
-              transition: 'all 0.18s',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.15rem',
-            }}
-          >
-            <span style={{
-              fontSize: '0.85rem',
-              fontWeight: 600,
-              color: techStack === stack.value ? 'var(--accent)' : 'var(--text)',
-              fontFamily: 'var(--font)',
-            }}>
-              {stack.tagline}
-            </span>
-            <span style={{
-              fontSize: '0.7rem',
-              color: 'var(--text-muted)',
-              fontFamily: 'var(--font)',
-            }}>
-              {stack.label}
-            </span>
-          </div>
-        ))}
+    <fieldset style={{ border: 0, margin: 0, padding: 0 }}>
+      <legend className="px-label" style={{ marginBottom: 8 }}>Choose your app type</legend>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10 }}>
+        {STACKS.map(stack => {
+          const selected = techStack === stack.value
+          return (
+            <button
+              key={stack.value}
+              type="button"
+              onClick={() => setTechStack(stack.value)}
+              aria-pressed={selected}
+              className={`px-option ${selected ? 'is-selected' : ''}`}
+            >
+              <span style={{ fontWeight: 700 }}>{stack.title}</span>
+              <span className="px-small px-muted">{stack.tagline}</span>
+              <span className="px-mono" style={{ fontSize: 11, fontWeight: 500, color: selected ? 'var(--accent-text)' : 'var(--faint)' }}>
+                {stack.value}
+              </span>
+            </button>
+          )
+        })}
       </div>
-    </div>
+    </fieldset>
   )
 }
