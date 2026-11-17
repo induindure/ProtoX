@@ -9,10 +9,13 @@
       // ProtoX theme: apply before the app loads (no flash). ?theme= carries it between modules.
       (function () {
         try {
+          var c = document.cookie.match(/(?:^|;\s*)protox-theme=(light|dark)/)
           var fromUrl = new URLSearchParams(location.search).get('theme')
-          var t = fromUrl || localStorage.getItem('protox-theme')
+          // shared cookie (all ProtoX ports) wins, then the link's ?theme, then this page's memory, then the system
+          var t = (c && c[1]) || fromUrl || localStorage.getItem('protox-theme')
           if (!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-          if (fromUrl) localStorage.setItem('protox-theme', t)
+          localStorage.setItem('protox-theme', t)
+          document.cookie = 'protox-theme=' + t + '; path=/; max-age=31536000; SameSite=Lax'
           if (t === 'dark') document.documentElement.classList.add('dark')
         } catch (e) {}
       })()

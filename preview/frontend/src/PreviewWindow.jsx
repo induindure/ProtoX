@@ -8,6 +8,7 @@ export default function PreviewWindow({ projectId }) {
   const [error, setError] = useState('')
   const [showLogs, setShowLogs] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
+  const [device, setDevice] = useState('both')   // both | desktop | phone
   const [browserError, setBrowserError] = useState('')
   const [fixPrompt, setFixPrompt] = useState('')
   const [promptLoading, setPromptLoading] = useState(false)
@@ -135,15 +136,34 @@ export default function PreviewWindow({ projectId }) {
       ? { cls: 'px-badge-err', text: `${statusLabel(status?.frontend?.status)} / ${statusLabel(status?.backend?.status)}` }
       : { cls: 'px-badge-accent', text: `Backend: ${statusLabel(status?.backend?.status)} · Frontend: ${statusLabel(status?.frontend?.status)}` }
 
+  const url = bothRunning ? status.frontend.url : ''
+  const browserBar = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderBottom: '1px solid var(--border)', background: 'var(--surface2)' }}>
+      <span style={{ display: 'flex', gap: 6 }} aria-hidden="true">
+        <span style={{ width: 10, height: 10, borderRadius: 999, background: '#F87171' }} />
+        <span style={{ width: 10, height: 10, borderRadius: 999, background: '#FBBF24' }} />
+        <span style={{ width: 10, height: 10, borderRadius: 999, background: '#34D399' }} />
+      </span>
+      <span className="px-mono px-small" style={{ flex: 1, minWidth: 0, padding: '4px 12px', borderRadius: 8, background: 'var(--surface)', color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {url || 'Starting…'}
+      </span>
+      {url && <a href={url} target="_blank" rel="noreferrer" className="px-small" style={{ fontWeight: 600, color: 'var(--accent-text)' }}>Open in new tab ↗</a>}
+    </div>
+  )
+
   return (
     <div className="px-stack">
       <div className="px-between">
         <div className="px-row" style={{ gap: 10 }}>
-          <h2 className="px-h2">Live demo</h2>
           <span className={`px-badge ${badge.cls}`} role="status">
             {bothRunning || anyFailed ? <span className="px-dot" /> : <span className="px-spinner" style={{ width: 12, height: 12 }} />}
             {badge.text}
           </span>
+          <div className="px-segmented" role="group" aria-label="Device">
+            {[['both', 'Both'], ['desktop', 'Desktop'], ['phone', 'Phone']].map(([v, label]) => (
+              <button key={v} type="button" aria-pressed={device === v} onClick={() => setDevice(v)}>{label}</button>
+            ))}
+          </div>
         </div>
         <div className="px-row" style={{ gap: 8 }}>
           <button className="px-btn px-btn-sm" onClick={() => setShowLogs(s => !s)} aria-expanded={showLogs}>
@@ -180,47 +200,49 @@ export default function PreviewWindow({ projectId }) {
         </section>
       )}
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'flex-start' }}>
-        <section className="px-card px-card-flush" style={{ flex: '999 1 640px', minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid var(--border)', background: 'var(--surface2)' }}>
-            <span style={{ display: 'flex', gap: 6 }} aria-hidden="true">
-              <span style={{ width: 10, height: 10, borderRadius: 999, background: 'var(--bar2)' }} />
-              <span style={{ width: 10, height: 10, borderRadius: 999, background: 'var(--bar2)' }} />
-              <span style={{ width: 10, height: 10, borderRadius: 999, background: 'var(--bar2)' }} />
-            </span>
-            <span className="px-mono px-small" style={{ flex: 1, minWidth: 0, padding: '4px 12px', borderRadius: 8, background: 'var(--surface)', color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {bothRunning ? status.frontend.url : 'Starting…'}
-            </span>
-            {bothRunning && (
-              <a href={status.frontend.url} target="_blank" rel="noreferrer" className="px-small" style={{ fontWeight: 600 }}>Open in new tab ↗</a>
-            )}
-          </div>
-          {bothRunning ? (
-            <iframe
-              key={status.frontend.url}
-              title="App preview"
-              src={status.frontend.url}
-              style={{ display: 'block', width: '100%', height: 'min(640px, calc(100vh - 260px))', minHeight: 420, border: 0, background: '#FFFFFF' }}
-            />
-          ) : (
-            <div style={{ height: 420, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, color: 'var(--muted)' }}>
-              {anyFailed ? (
-                <>
-                  <span className="px-badge px-badge-err">Couldn’t start</span>
-                  <p style={{ margin: 0 }}>The demo app failed to start. Check the logs, or use “Something wrong?”.</p>
-                </>
-              ) : (
-                <>
-                  <span className="px-spinner" style={{ width: 28, height: 28, color: 'var(--accent)' }} />
-                  <p style={{ margin: 0 }}>Spinning up your app… installing can take a minute or two.</p>
-                </>
-              )}
+      {bothRunning ? (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 28, alignItems: 'flex-start', justifyContent: 'center' }}>
+          {device !== 'phone' && (
+            <section className="px-card px-card-flush" style={{ flex: '1 1 640px', maxWidth: device === 'desktop' ? 'none' : 900, minWidth: 0 }} aria-label="Desktop preview">
+              {browserBar}
+              <iframe
+                key={url}
+                title="App preview, desktop"
+                src={url}
+                style={{ display: 'block', width: '100%', height: device === 'desktop' ? 'min(720px, calc(100vh - 230px))' : 596, minHeight: 420, border: 0, background: '#FFFFFF' }}
+              />
+            </section>
+          )}
+          {device !== 'desktop' && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+              <div className="px-phone">
+                <iframe key={url + '-phone'} title="App preview, phone" src={url} />
+              </div>
+              <span className="px-small px-muted">Phone view</span>
             </div>
           )}
+        </div>
+      ) : (
+        <section className="px-card px-card-flush">
+          {browserBar}
+          <div style={{ height: 420, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, color: 'var(--muted)', padding: 24, textAlign: 'center' }}>
+            {anyFailed ? (
+              <>
+                <span className="px-badge px-badge-err">Couldn’t start</span>
+                <p style={{ margin: 0 }}>The demo app failed to start. Check the logs, or use “Something wrong?”.</p>
+              </>
+            ) : (
+              <>
+                <span className="px-spinner" style={{ width: 28, height: 28, color: 'var(--accent)' }} />
+                <p style={{ margin: 0 }}>Spinning up your app… installing can take a minute or two.</p>
+              </>
+            )}
+          </div>
         </section>
+      )}
 
-        {showHelp && (
-          <aside className="px-card px-stack" style={{ flex: '1 1 320px', maxWidth: 400 }} aria-label="Get help fixing the app">
+      {showHelp && (
+          <aside className="px-card px-stack" style={{ width: '100%', maxWidth: 760, margin: '0 auto', boxSizing: 'border-box' }} aria-label="Get help fixing the app">
             <div className="px-row" style={{ gap: 10, flexWrap: 'nowrap' }}>
               <span style={{ width: 32, height: 32, borderRadius: 9, background: 'var(--brand)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} aria-hidden="true">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z" /></svg>
@@ -279,8 +301,7 @@ export default function PreviewWindow({ projectId }) {
               </div>
             )}
           </aside>
-        )}
-      </div>
+      )}
     </div>
   )
 }

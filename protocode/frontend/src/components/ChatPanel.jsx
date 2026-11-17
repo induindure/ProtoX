@@ -61,47 +61,39 @@ export default function ChatPanel({ onSend, onUndo, canUndo }) {
       </div>
     )
 
+  const [showLog, setShowLog] = useState(true)
+
   return (
-    <aside className="px-pane" aria-label="Edit with chat" style={{ background: 'var(--surface)' }}>
-      <div className="px-pane-head">
-        <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700 }}>
-          <span style={{ width: 26, height: 26, borderRadius: 8, background: 'var(--brand)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }} aria-hidden="true">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z" /></svg>
-          </span>
-          Edit with chat
+    <div className="px-chat-float" aria-label="Edit with chat">
+      {showLog && (messages.length > 0 || busy) && (
+        <div className="px-chat-log" aria-live="polite">
+          {messages.map((m, i) => (
+            <div key={i} className={bubbleClass(m.role)}>
+              {m.text}
+              {m.role === 'assistant' && (
+                <>
+                  {pathList('Changed', m.changed, 'var(--ok)')}
+                  {pathList('New files', m.created, 'var(--accent-text)')}
+                  {!m.changed?.length && !m.created?.length && (
+                    <div className="px-small" style={{ marginTop: 8, color: 'var(--muted)' }}>No files changed.</div>
+                  )}
+                </>
+              )}
+            </div>
+          ))}
+          {busy && (
+            <div className="px-msg px-msg-bot" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span className="px-spinner" /> Editing…
+            </div>
+          )}
+          <div ref={bottomRef} />
+        </div>
+      )}
+
+      <div className="px-composer" style={{ alignItems: 'center' }}>
+        <span style={{ width: 30, height: 30, borderRadius: 9, background: 'var(--brand)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 4 }} aria-hidden="true">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z" /></svg>
         </span>
-        <button onClick={undo} disabled={!canUndo || busy} className="px-btn px-btn-sm">Undo</button>
-      </div>
-
-      <div className="px-pane-body" style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }} aria-live="polite">
-        {messages.length === 0 && (
-          <p className="px-small px-muted" style={{ margin: 0 }}>
-            Ask for a change, e.g. “make the Follow button call the API” or “remove the hardcoded followers card”.
-          </p>
-        )}
-        {messages.map((m, i) => (
-          <div key={i} className={bubbleClass(m.role)}>
-            {m.text}
-            {m.role === 'assistant' && (
-              <>
-                {pathList('Changed', m.changed, 'var(--ok)')}
-                {pathList('New files', m.created, 'var(--accent-text)')}
-                {!m.changed?.length && !m.created?.length && (
-                  <div className="px-small" style={{ marginTop: 8, color: 'var(--muted)' }}>No files changed.</div>
-                )}
-              </>
-            )}
-          </div>
-        ))}
-        {busy && (
-          <div className="px-msg px-msg-bot" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span className="px-spinner" /> Editing…
-          </div>
-        )}
-        <div ref={bottomRef} />
-      </div>
-
-      <div style={{ padding: 12, borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 8 }}>
         <label htmlFor="chat-input" className="px-sr-only">Describe a change</label>
         <textarea
           id="chat-input"
@@ -109,15 +101,21 @@ export default function ChatPanel({ onSend, onUndo, canUndo }) {
           onChange={e => setInput(e.target.value)}
           onKeyDown={onKeyDown}
           disabled={busy}
-          rows={3}
-          placeholder="Describe a change… (Enter to send)"
+          rows={1}
+          placeholder="Ask ProtoX to change the code… e.g. add a login page (Enter to send)"
           className="px-textarea"
-          style={{ resize: 'none' }}
+          style={{ resize: 'none', borderColor: 'transparent', minHeight: 44 }}
         />
-        <button onClick={submit} disabled={busy || !input.trim()} className="px-btn px-btn-primary px-btn-block">
-          {busy ? <><span className="px-spinner" /> Editing…</> : 'Apply edit'}
+        {messages.length > 0 && (
+          <button onClick={() => setShowLog(v => !v)} className="px-btn px-btn-sm px-btn-ghost" aria-expanded={showLog}>
+            {showLog ? 'Hide chat' : `Chat (${messages.length})`}
+          </button>
+        )}
+        <button onClick={undo} disabled={!canUndo || busy} className="px-btn px-btn-sm">Undo</button>
+        <button onClick={submit} disabled={busy || !input.trim()} className="px-btn px-btn-primary">
+          {busy ? <><span className="px-spinner" /> Editing…</> : 'Send'}
         </button>
       </div>
-    </aside>
+    </div>
   )
 }

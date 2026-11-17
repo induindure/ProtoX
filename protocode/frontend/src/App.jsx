@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import Header, { Hero, CheckIcon } from './protox/Header'
+import Header, { CheckIcon, LogoMark } from './protox/Header'
 import { MODULE_URLS, withTheme } from './protox/theme'
 import IdeaPanel from './components/IdeaPanel'
 import TechSelector from './components/TechSelector'
@@ -143,68 +143,79 @@ export default function App() {
     <div className="px-page">
       <Header current={2} />
 
-      <Hero step={2} title="Generate project code">
-        Turn your refined idea into a working starter project, then edit it with chat.
-      </Hero>
-
-      <main className="px-container px-stack-lg">
-        <div className="px-row" style={{ alignItems: 'flex-start', gap: 20 }}>
-          <div style={{ flex: '1 1 340px', minWidth: 0 }}>
-            <IdeaPanel idea={idea} />
+      <div className="px-sidebar-layout">
+        <aside className="px-sidebar" aria-label="Code settings">
+          <div>
+            <p className="px-eyebrow">Step 2 of 5</p>
+            <h1 className="px-hero-title" style={{ fontSize: 22, marginTop: 6 }}>Generate project code</h1>
           </div>
 
-          <section className="px-card px-stack-lg" style={{ flex: '1.4 1 460px', minWidth: 0 }}>
-            <TechSelector techStack={techStack} setTechStack={setTechStack} />
-            <DatabaseUrlInput databaseUrl={databaseUrl} setDatabaseUrl={setDatabaseUrl} />
-            <SupabaseGuide />
+          <IdeaPanel idea={idea} />
+          <TechSelector techStack={techStack} setTechStack={setTechStack} />
+          <DatabaseUrlInput databaseUrl={databaseUrl} setDatabaseUrl={setDatabaseUrl} />
+          <SupabaseGuide />
 
-            {error && (
-              <div className="px-alert px-alert-err" role="alert">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></svg>
-                {error}
-              </div>
-            )}
-
-            <button onClick={handleGenerate} disabled={blocked} className="px-btn px-btn-cta px-btn-lg" style={{ alignSelf: 'flex-start' }}>
-              {loading ? (
-                <><span className="px-spinner" /> Generating code…</>
-              ) : (
-                <>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6" /></svg>
-                  Generate code
-                </>
-              )}
-            </button>
-          </section>
-        </div>
-
-        {result && (
-          <div ref={outputRef} className="px-stack" style={{ scrollMarginTop: 80 }}>
-            <div className="px-alert px-alert-ok px-between" style={{ alignItems: 'center' }}>
-              <div>
-                <p style={{ margin: 0, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <CheckIcon size={16} /> Code generated · {result.files.length} files
-                </p>
-                <p className="px-small" style={{ margin: '2px 0 0 24px', color: 'var(--muted)' }}>
-                  Next, run tests. Download the ZIP from the code panel whenever you’re happy with the final version.
-                </p>
-              </div>
-              <button onClick={handleSendToProtoTest} className="px-btn px-btn-cta">Send to ProtoTest →</button>
+          {error && (
+            <div className="px-alert px-alert-err" role="alert">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></svg>
+              {error}
             </div>
+          )}
 
-            <section className="px-card px-card-flush px-workspace">
-              <FileTree tree={result.file_tree} onFileClick={handleFileClick} selectedPath={selectedFile?.path} />
-              <CodeOutput file={selectedFile} allFiles={result.files} projectName={result.project_name} />
-              <ChatPanel
-                key={generation}  /* fresh chat for each new generation */
-                onSend={handleChatEdit}
-                onUndo={handleUndo}
-                canUndo={!!previousResult}
-              />
-            </section>
-          </div>
-        )}
-      </main>
+          <button onClick={handleGenerate} disabled={blocked} className="px-btn px-btn-cta px-btn-lg px-btn-block">
+            {loading ? (
+              <><span className="px-spinner" /> Generating code…</>
+            ) : (
+              <>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6" /></svg>
+                {result ? 'Generate again' : 'Generate code'}
+              </>
+            )}
+          </button>
+        </aside>
+
+        <main className="px-sidebar-main">
+          {!result && !loading && (
+            <div className="px-empty" style={{ flex: 1, justifyContent: 'center' }}>
+              <div style={{ marginBottom: 14 }}><LogoMark size={48} /></div>
+              <h2>Your code will appear here</h2>
+              <p>Pick an app type, paste your database URL, then click Generate code. You can then browse the files and ask for changes in chat.</p>
+            </div>
+          )}
+
+          {loading && (
+            <div className="px-card px-stack" aria-live="polite" style={{ flex: 1 }}>
+              <div className="px-row" style={{ color: 'var(--accent-text)', fontWeight: 600 }}>
+                <span className="px-spinner" /> Writing your project… this can take a minute.
+              </div>
+              {[70, 90, 55, 80, 40].map((w, i) => <div key={i} className="px-skeleton" style={{ height: 12, width: `${w}%` }} />)}
+            </div>
+          )}
+
+          {result && !loading && (
+            <>
+              <div ref={outputRef} className="px-between" style={{ scrollMarginTop: 80 }}>
+                <div className="px-row" style={{ gap: 10 }}>
+                  <span className="px-badge px-badge-ok"><CheckIcon size={14} /> {result.files.length} files ready</span>
+                  <span className="px-small px-muted">Browse the files, ask for changes, then run tests.</span>
+                </div>
+                <button onClick={handleSendToProtoTest} className="px-btn px-btn-cta">Send to ProtoTest →</button>
+              </div>
+
+              <section className="px-card px-card-flush px-workspace is-two">
+                <FileTree tree={result.file_tree} onFileClick={handleFileClick} selectedPath={selectedFile?.path} />
+                <CodeOutput file={selectedFile} allFiles={result.files} projectName={result.project_name} />
+                <ChatPanel
+                  key={generation}  /* fresh chat for each new generation */
+                  onSend={handleChatEdit}
+                  onUndo={handleUndo}
+                  canUndo={!!previousResult}
+                />
+              </section>
+            </>
+          )}
+        </main>
+      </div>
     </div>
   )
 }

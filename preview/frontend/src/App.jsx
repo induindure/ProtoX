@@ -16,15 +16,15 @@ export default function App() {
     <div className="px-page">
       <Header current={4} />
 
-      <Hero step={4} title="Preview your app">
-        Your generated app running live. Try it out, and if something looks wrong we’ll write a fix request for ProtoCode.
+      <Hero step={4} title="See your app running" compact>
+        Try it on desktop and phone. If something looks wrong, we’ll write a fix request.
       </Hero>
 
-      <main className="px-container">
+      <main className="px-container" style={{ maxWidth: 1360, paddingTop: 20 }}>
         {projectId ? (
           <PreviewWindow projectId={projectId} />
         ) : (
-          <div className="px-empty">
+          <div className="px-empty is-compact">
             <span className="px-empty-icon" aria-hidden="true">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2" /><path d="M10 9l5 3-5 3z" /></svg>
             </span>

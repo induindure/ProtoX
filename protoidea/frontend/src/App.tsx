@@ -15,8 +15,8 @@ import type { RankedIdea, IdeaRequest, IdeaResponse, IdeaModel } from './types'
 
 function EmptyState() {
   return (
-    <div className="px-empty">
-      <div style={{ marginBottom: 16 }}><LogoMark size={56} /></div>
+    <div className="px-empty is-compact">
+      <div style={{ marginBottom: 14 }}><LogoMark size={48} /></div>
       <h2>Your ideas will appear here</h2>
       <p>Pick a domain and an app type, then generate. You’ll get 3–5 ranked ideas you can refine and send to ProtoCode.</p>
     </div>
@@ -119,12 +119,10 @@ export default function App() {
         <UserMenu />
       </Header>
 
-      <Hero step={1} title="What should we build today?">
-        Describe the space and ProtoX suggests ranked, buildable app ideas you can refine and turn into code.
-      </Hero>
+      <Hero step={1} title="What should we build today?" compact />
 
-      <main className="px-container grid items-start gap-6 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
-        <aside className="px-stack-lg">
+      <main className="px-container px-split" style={{ paddingTop: 24 }}>
+        <aside className="px-card px-card-flush px-sticky">
           <IdeaForm onSubmit={mutation.mutate} loading={mutation.isPending} />
           <HistoryPanel
             onLoad={(record) => {
@@ -136,7 +134,7 @@ export default function App() {
           />
         </aside>
 
-        <section className="min-w-0">
+        <section style={{ minWidth: 0 }}>
           {!currentResult && !mutation.isPending && <EmptyState />}
 
           {mutation.isPending && <LoadingState />}
@@ -145,7 +143,7 @@ export default function App() {
             <div className="px-stack">
               <div className="px-between" style={{ alignItems: 'flex-end' }}>
                 <div>
-                  <h2 className="px-title" style={{ fontSize: 24 }}>
+                  <h2 className="px-title" style={{ fontSize: 22 }}>
                     {currentResult.ideas.length} ideas for <span className="px-gradient-text">{currentResult.domain}</span>
                   </h2>
                   <p className="px-subtitle">{currentResult.app_type} · ranked by overall score · pick one to refine</p>
@@ -175,7 +173,7 @@ export default function App() {
                   loading={refinementLoading}
                 />
               ) : (
-                <div className="px-stack">
+                <div className="px-stack" style={{ gap: 12 }}>
                   {currentResult.ideas.map((ranked, i) => (
                     <IdeaCard
                       key={i}

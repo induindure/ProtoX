@@ -1,38 +1,28 @@
 import { MODULE_URLS, withTheme } from '../protox/theme'
-import { LogoMark } from '../protox/Header'
 
 export default function IdeaPanel({ idea }) {
   if (!idea) {
     return (
-      <div className="px-empty" style={{ padding: '40px 24px' }}>
-        <div style={{ marginBottom: 16 }}><LogoMark size={56} /></div>
-        <h2>No idea loaded yet</h2>
-        <p>Pick an idea in ProtoIdea and click “Finalize &amp; open ProtoCode”. It will appear here.</p>
-        <a href={withTheme(MODULE_URLS.idea)} className="px-btn px-btn-outline" style={{ marginTop: 16 }}>Go to ProtoIdea</a>
+      <div className="px-alert px-alert-warn" style={{ flexDirection: 'column', gap: 8 }}>
+        <b>No idea loaded yet</b>
+        <span className="px-small">Choose an idea in ProtoIdea and click “Finalize”. It will appear here.</span>
+        <a href={withTheme(MODULE_URLS.idea)} className="px-btn px-btn-sm px-btn-outline">Go to ProtoIdea</a>
       </div>
     )
   }
 
   return (
-    <section className="px-card px-stack">
-      <div className="px-between">
-        <p className="px-section-label">Your idea</p>
-        <span className="px-badge px-badge-accent">From ProtoIdea</span>
-      </div>
-      <div>
-        <h2 className="px-title" style={{ fontSize: 22 }}>{idea.title}</h2>
-        <p className="px-subtitle">{idea.description}</p>
-      </div>
-      <div>
-        <p className="px-section-label" style={{ marginBottom: 4 }}>Target users</p>
-        <p style={{ margin: 0 }}>{idea.target_users}</p>
-      </div>
-      <div>
-        <p className="px-section-label" style={{ marginBottom: 6 }}>Core features</p>
+    <section style={{ padding: 14, borderRadius: 12, background: 'var(--accent-soft)', color: 'var(--accent-text)' }}>
+      <p className="px-section-label" style={{ color: 'inherit' }}>Your idea</p>
+      <h2 style={{ margin: '4px 0 0', fontSize: 17, fontWeight: 700, color: 'var(--text)' }}>{idea.title}</h2>
+      <p className="px-small" style={{ margin: '4px 0 0', color: 'var(--muted)' }}>{idea.description}</p>
+      <details style={{ marginTop: 8 }}>
+        <summary className="px-small" style={{ cursor: 'pointer', fontWeight: 600 }}>Users &amp; features</summary>
+        <p className="px-small" style={{ margin: '8px 0', color: 'var(--text)' }}>{idea.target_users}</p>
         <div className="px-chips">
-          {idea.features.map((f, i) => <span key={i} className="px-chip">{f}</span>)}
+          {idea.features.map((f, i) => <span key={i} className="px-chip" style={{ background: 'var(--surface)', color: 'var(--text)' }}>{f}</span>)}
         </div>
-      </div>
+      </details>
     </section>
   )
 }

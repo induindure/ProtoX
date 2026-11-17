@@ -25,10 +25,10 @@ export default function IdeaForm({ onSubmit, loading }: Props) {
   const isValid = (domain === 'Other' ? customDomain.trim().length > 0 : domain.length > 0) && appType.length > 0
 
   return (
-    <form onSubmit={handleSubmit} className="px-card px-stack">
+    <form onSubmit={handleSubmit} className="px-stack" style={{ padding: 20, gap: 14 }}>
       <div>
-        <h2 className="px-h2">New ideas</h2>
-        <p className="px-subtitle px-small">ProtoIdea generates 3–5 scoped, buildable app ideas.</p>
+        <h2 className="px-h3">New ideas</h2>
+        <p className="px-subtitle px-small">Get 3–5 scoped, buildable app ideas.</p>
       </div>
 
       <div className="px-field">
@@ -51,7 +51,7 @@ export default function IdeaForm({ onSubmit, loading }: Props) {
 
       <fieldset className="px-field" style={{ border: 0, margin: 0, padding: 0 }}>
         <legend className="px-label" style={{ marginBottom: 6 }}>App type</legend>
-        <div className="px-chips">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6 }}>
           {APP_TYPES.map((type) => (
             <button
               key={type}
@@ -59,6 +59,7 @@ export default function IdeaForm({ onSubmit, loading }: Props) {
               onClick={() => setAppType(type)}
               aria-pressed={appType === type}
               className={`px-pill ${appType === type ? 'is-selected' : ''}`}
+              style={{ minHeight: 40 }}
             >
               {type}
             </button>
@@ -72,8 +73,8 @@ export default function IdeaForm({ onSubmit, loading }: Props) {
         </label>
         <textarea
           id="constraints"
-          rows={3}
-          placeholder="e.g. free to use, simple UI, no login, for college students…"
+          rows={2}
+          placeholder="e.g. free, simple UI, for college students"
           value={constraints}
           onChange={(e) => setConstraints(e.target.value)}
           className="px-textarea"

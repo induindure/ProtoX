@@ -1,5 +1,5 @@
-import { Fragment, useState } from 'react'
-import { MODULE_URLS, applyTheme, currentTheme, withTheme } from './theme'
+import { useEffect, useState } from 'react'
+import { MODULE_URLS, applyTheme, currentTheme, watchTheme, withTheme } from './theme'
 
 const STEPS = [
   { n: 1, label: 'Idea', href: MODULE_URLS.idea },
@@ -35,6 +35,9 @@ export default function Header({ current = 0, minimal = false, children }) {
   const [theme, setTheme] = useState(currentTheme)
   const dark = theme === 'dark'
 
+  // follow theme changes made on any other ProtoX page
+  useEffect(() => watchTheme(setTheme), [])
+
   const toggle = () => {
     const next = dark ? 'light' : 'dark'
     applyTheme(next)
@@ -49,25 +52,24 @@ export default function Header({ current = 0, minimal = false, children }) {
           <Wordmark />
         </a>
 
+        {/* Progress only, not links: moving between modules happens through the
+            "Send to …" buttons, which carry your work along. */}
         {!minimal && (
-        <nav className="px-steps" aria-label="ProtoX pipeline">
+        <ol className="px-steps" aria-label="ProtoX progress">
           {STEPS.map((step, i) => {
             const state = step.n < current ? 'done' : step.n === current ? 'current' : 'todo'
             return (
-              <Fragment key={step.n}>
+              <li key={step.n}>
                 {i > 0 && <span className="px-step-sep" aria-hidden="true">›</span>}
-                <a
-                  className={`px-step is-${state}`}
-                  href={withTheme(step.href)}
-                  aria-current={state === 'current' ? 'page' : undefined}
-                >
+                <span className={`px-step is-${state}`} aria-current={state === 'current' ? 'step' : undefined}>
                   <span className="px-step-dot">{state === 'done' ? <CheckIcon /> : step.n}</span>
                   {step.label}
-                </a>
-              </Fragment>
+                  {state === 'done' && <span className="px-sr-only"> (done)</span>}
+                </span>
+              </li>
             )
           })}
-        </nav>
+        </ol>
         )}
 
         <div className="px-header-actions">
@@ -97,13 +99,16 @@ export default function Header({ current = 0, minimal = false, children }) {
 }
 
 /** The soft aurora band with the page title, used under the header on every screen. */
-export function Hero({ step, title, children }) {
+export function Hero({ step, title, children, compact = false, aside = null }) {
   return (
-    <div className="px-hero">
+    <div className={`px-hero ${compact ? 'is-compact' : ''}`}>
       <div className="px-hero-inner">
-        <p className="px-eyebrow">Step {step} of 5</p>
-        <h1 className="px-hero-title">{title}</h1>
-        {children && <p className="px-hero-text">{children}</p>}
+        <div className={compact ? 'px-hero-head' : undefined}>
+          <p className="px-eyebrow">Step {step} of 5</p>
+          <h1 className="px-hero-title">{title}</h1>
+          {children && <p className="px-hero-text">{children}</p>}
+        </div>
+        {aside && <div className="px-hero-aside">{aside}</div>}
       </div>
     </div>
   )

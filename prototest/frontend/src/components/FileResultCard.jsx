@@ -13,7 +13,7 @@ export default function FileResultCard({ result }) {
   const hasReview = Boolean(result.ai_feedback)
 
   return (
-    <li style={{ borderTop: '1px solid var(--border)' }}>
+    <li style={{ borderBottom: '1px solid var(--border)' }}>
       <button
         type="button"
         onClick={() => hasReview && setOpen(o => !o)}

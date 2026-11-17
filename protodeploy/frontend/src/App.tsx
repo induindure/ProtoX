@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { deployProject, getBuildStatus, type DeployResult } from "./api";
 import GithubTokenGuide from "./components/GithubTokenGuide";
 import Header, { Hero, CheckIcon } from "./protox/Header";
@@ -44,17 +44,62 @@ export default function App() {
   const buildFailed = ["failure", "cancelled", "timed_out"].includes(build);
   const fileSize = file ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : "";
 
+  type StepState = "todo" | "active" | "done" | "error";
+  const DOT: Record<StepState, CSSProperties> = {
+    todo: { border: "1px solid var(--border)", color: "var(--faint)" },
+    active: { background: "var(--accent-soft)", color: "var(--accent-text)" },
+    done: { background: "var(--ok-soft)", color: "var(--ok)" },
+    error: { background: "var(--err-soft)", color: "var(--err)" },
+  };
+  const buildState: StepState = !result ? "todo" : buildDone ? "done" : buildFailed ? "error" : "active";
+  const steps: { title: string; state: StepState; body: ReactNode }[] = [
+    {
+      title: "Push to GitHub",
+      state: result ? "done" : loading ? "active" : "todo",
+      body: result
+        ? <a href={result.repo_url} target="_blank" rel="noreferrer" style={{ wordBreak: "break-all", color: "var(--accent-text)" }}>{result.repo_url}</a>
+        : loading ? "Uploading your project…" : "Creates the repository and uploads your code.",
+    },
+    {
+      title: "Build the frontend",
+      state: buildState,
+      body: result
+        ? <>Status: {build.replace("_", " ")} · <a href={result.actions_url} target="_blank" rel="noreferrer" style={{ color: "var(--accent-text)" }}>build logs ↗</a></>
+        : "GitHub Actions builds and publishes it to GitHub Pages.",
+    },
+    {
+      title: "Backend on Render",
+      state: "todo",
+      body: result ? <>One click to finish. It will run at {result.backend_url}</> : "You confirm it on Render with one click.",
+    },
+    {
+      title: "Live link",
+      state: buildDone ? "done" : "todo",
+      body: buildDone && result
+        ? <a href={result.frontend_url} target="_blank" rel="noreferrer" style={{ wordBreak: "break-all", color: "var(--accent-text)" }}>{result.frontend_url}</a>
+        : "Appears here when the build finishes.",
+    },
+  ];
+  const phase = buildDone
+    ? { cls: "px-badge-ok", label: "Live" }
+    : buildFailed
+      ? { cls: "px-badge-err", label: "Build failed" }
+      : result || loading
+        ? { cls: "px-badge-accent", label: "In progress" }
+        : { cls: "px-badge-neutral", label: "Not started" };
+
   return (
     <div className="px-page">
       <Header current={5} />
 
-      <Hero step={5} title="Deploy your app">
-        We push your project to GitHub, publish the frontend on GitHub Pages and set up the backend on Render.
+      <Hero step={5} title="Deploy your app" compact>
+        GitHub for the code and frontend, Render for the backend.
       </Hero>
 
-      <main className="px-container px-container-narrow">
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 20, alignItems: "flex-start" }}>
-          <section className="px-card px-stack" style={{ flex: "1.2 1 440px", minWidth: 0 }}>
+      <main className="px-container" style={{ maxWidth: 1180 }}>
+        <div className="px-split px-split-even">
+          <section className="px-card px-stack" style={{ minWidth: 0 }}>
+            <h2 className="px-h2">Settings</h2>
             <div className="px-field">
               <span className="px-label">Project ZIP</span>
               <label
@@ -120,63 +165,33 @@ export default function App() {
             </button>
           </section>
 
-          <section className="px-card px-stack" style={{ flex: "1 1 360px", minWidth: 0 }} aria-live="polite">
+          <section className="px-card px-stack px-sticky" style={{ minWidth: 0 }} aria-live="polite">
             <div className="px-between">
-              <h2 className="px-h2">Deployment</h2>
-              {result && <span className="px-badge px-badge-accent">{result.stack.frontend} + {result.stack.backend}</span>}
+              <h2 className="px-h2">Live progress</h2>
+              <span className={`px-badge ${phase.cls}`}>{phase.label}</span>
             </div>
 
-            {!result ? (
-              <p className="px-muted" style={{ margin: 0 }}>
-                {loading ? "Pushing your project to GitHub…" : "Fill in the form and deploy. Progress and links will appear here."}
-              </p>
-            ) : (
-              <>
-                <ol className="px-timeline">
-                  <li>
-                    <div className="px-timeline-rail">
-                      <span className="px-timeline-dot" style={{ background: "var(--ok-soft)", color: "var(--ok)" }}><CheckIcon size={14} /></span>
-                    </div>
-                    <div className="px-timeline-body">
-                      <p style={{ margin: "3px 0 0", fontWeight: 600 }}>Pushed to GitHub</p>
-                      <a href={result.repo_url} target="_blank" rel="noreferrer" className="px-small" style={{ wordBreak: "break-all" }}>{result.repo_url}</a>
-                    </div>
-                  </li>
-                  <li>
-                    <div className="px-timeline-rail">
-                      <span
-                        className="px-timeline-dot"
-                        style={{
-                          background: buildDone ? "var(--ok-soft)" : buildFailed ? "var(--err-soft)" : "var(--accent-soft)",
-                          color: buildDone ? "var(--ok)" : buildFailed ? "var(--err)" : "var(--accent-text)",
-                        }}
-                      >
-                        {buildDone ? <CheckIcon size={14} /> : buildFailed ? "!" : <span className="px-spinner" style={{ width: 12, height: 12 }} />}
-                      </span>
-                    </div>
-                    <div className="px-timeline-body">
-                      <p style={{ margin: "3px 0 0", fontWeight: 600 }}>
-                        Frontend build <span style={{ fontWeight: 500, color: "var(--muted)" }}>· {build.replace("_", " ")}</span>
-                      </p>
-                      <a href={result.actions_url} target="_blank" rel="noreferrer" className="px-small">View build logs ↗</a>
-                    </div>
-                  </li>
-                  <li>
-                    <div className="px-timeline-rail">
-                      <span className="px-timeline-dot" style={{ border: "1px solid var(--border)", color: "var(--faint)" }}>3</span>
-                    </div>
-                    <div className="px-timeline-body">
-                      <p style={{ margin: "3px 0 0", fontWeight: 600 }}>Backend on Render</p>
-                      <p className="px-small px-muted" style={{ margin: 0 }}>One click to finish. It will run at {result.backend_url}</p>
-                    </div>
-                  </li>
-                </ol>
+            <ol className="px-timeline">
+              {steps.map((st, i) => (
+                <li key={st.title}>
+                  <div className="px-timeline-rail">
+                    <span className="px-timeline-dot" style={DOT[st.state]}>
+                      {st.state === "done" ? <CheckIcon size={14} /> : st.state === "active" ? <span className="px-spinner" style={{ width: 12, height: 12 }} /> : st.state === "error" ? "!" : i + 1}
+                    </span>
+                  </div>
+                  <div className="px-timeline-body" style={{ flex: 1 }}>
+                    <p style={{ margin: "3px 0 0", fontWeight: 600, color: st.state === "todo" ? "var(--faint)" : "var(--text)" }}>{st.title}</p>
+                    <div className="px-small" style={{ color: "var(--muted)", marginTop: 2 }}>{st.body}</div>
+                  </div>
+                </li>
+              ))}
+            </ol>
 
-                <div className="px-stack" style={{ gap: 8, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
-                  <a href={result.frontend_url} target="_blank" rel="noreferrer" className="px-btn">Open live site ↗</a>
-                  <a href={result.backend_deploy_url} target="_blank" rel="noreferrer" className="px-btn px-btn-cta">Deploy backend on Render ↗</a>
-                </div>
-              </>
+            {result && (
+              <div className="px-stack" style={{ gap: 8, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
+                <a href={result.backend_deploy_url} target="_blank" rel="noreferrer" className="px-btn px-btn-cta">Deploy backend on Render ↗</a>
+                <a href={result.frontend_url} target="_blank" rel="noreferrer" className="px-btn">Open live site ↗</a>
+              </div>
             )}
           </section>
         </div>

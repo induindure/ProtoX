@@ -29,7 +29,7 @@ export default function FixHistoryCard({ data }) {
 
       {!data.success && (
         <div className="px-alert px-alert-warn">
-          Use “Get fix prompt for ProtoCode” above and paste it into ProtoCode’s chat.
+          Use “Get fix prompt for ProtoCode” and paste it into ProtoCode’s chat.
         </div>
       )}
 
