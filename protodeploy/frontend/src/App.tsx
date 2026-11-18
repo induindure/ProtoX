@@ -230,7 +230,7 @@ export default function App() {
                 {allDone && (
                   <div style={{ marginTop: 6 }}>
                     <p style={{ margin: "0 0 2px", fontWeight: 700 }}>Share your app</p>
-                    <p className="px-small" style={{ margin: "0 0 8px", color: "var(--muted)" }}>Copy this link and send it to anyone</p>
+                    <p className="px-small" style={{ margin: "0 0 8px", color: "var(--muted)" }}>Copy this link and send it to the world to share your app</p>
                     <div style={{ position: "relative" }}>
                       <input
                         readOnly
