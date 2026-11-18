@@ -15,6 +15,7 @@ export default function PreviewWindow({ projectId }) {
   const [promptError, setPromptError] = useState('')
   const [copied, setCopied] = useState(false)
   const pollRef = useRef(null)
+  const helpRef = useRef(null)
 
   const [userNote, setUserNote] = useState('')
   const [showChoices, setShowChoices] = useState(false)
@@ -130,6 +131,13 @@ export default function PreviewWindow({ projectId }) {
     if (anyFailed) setShowHelp(true)
   }, [anyFailed])
 
+  useEffect(() => {
+  if (showHelp) {
+    // wait a tick so the panel is in the DOM before scrolling
+    setTimeout(() => helpRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+  }
+}, [showHelp])
+
   const badge = bothRunning
     ? { cls: 'px-badge-ok', text: 'Running' }
     : anyFailed
@@ -170,7 +178,7 @@ export default function PreviewWindow({ projectId }) {
             {showLogs ? 'Hide logs' : 'Show logs'}
           </button>
           {(bothRunning || anyFailed) && (
-            <button className={`px-btn px-btn-sm ${showHelp ? '' : 'px-btn-outline'}`} onClick={() => setShowHelp(s => !s)} aria-expanded={showHelp}>
+            <button className={`px-btn px-btn-sm ${showHelp ? 'px-btn-outline' : ''}`} onClick={() => setShowHelp(s => !s)} aria-expanded={showHelp}>
               Something wrong?
             </button>
           )}
@@ -242,7 +250,7 @@ export default function PreviewWindow({ projectId }) {
       )}
 
       {showHelp && (
-          <aside className="px-card px-stack" style={{ width: '100%', maxWidth: 760, margin: '0 auto', boxSizing: 'border-box' }} aria-label="Get help fixing the app">
+          <aside ref={helpRef} className="px-card px-stack" style={{ width: '100%', maxWidth: 760, margin: '0 auto', boxSizing: 'border-box' }} aria-label="Get help fixing the app">
             <div className="px-row" style={{ gap: 10, flexWrap: 'nowrap' }}>
               <span style={{ width: 32, height: 32, borderRadius: 9, background: 'var(--brand)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} aria-hidden="true">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z" /></svg>
