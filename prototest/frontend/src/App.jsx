@@ -64,7 +64,9 @@ export default function App() {
       })
       if (!response.ok) throw new Error()
       const data = await response.json()
-      window.open(withTheme(`${MODULE_URLS.preview}/?id=${data.project_id}`), '_blank')
+      const type = new URLSearchParams(window.location.search).get('type')
+      const typeParam = type ? `&type=${encodeURIComponent(type)}` : ''
+      window.open(withTheme(`${MODULE_URLS.preview}/?id=${data.project_id}${typeParam}`), '_blank')
     } catch {
       setError('Could not send project to Preview.')
     }

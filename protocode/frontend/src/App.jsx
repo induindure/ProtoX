@@ -131,7 +131,8 @@ export default function App() {
         }),
       })
       const data = await response.json()
-      window.open(withTheme(`${MODULE_URLS.test}/?id=${data.project_id}`), '_blank')
+      const type = idea?.app_type ? `&type=${encodeURIComponent(idea.app_type)}` : ''
+      window.open(withTheme(`${MODULE_URLS.test}/?id=${data.project_id}${type}`), '_blank')
     } catch {
       setError('Could not send project to ProtoTest.')
     }

@@ -8,7 +8,9 @@ export default function PreviewWindow({ projectId }) {
   const [error, setError] = useState('')
   const [showLogs, setShowLogs] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
-  const [device, setDevice] = useState('both')   // both | desktop | phone
+  const appType = (new URLSearchParams(window.location.search).get('type') || '').toLowerCase()
+  const lockedDevice = appType.includes('mobile') ? 'phone' : appType.includes('web') ? 'desktop' : null
+  const [device, setDevice] = useState(lockedDevice || 'both')   // both | desktop | phone
   const [browserError, setBrowserError] = useState('')
   const [fixPrompt, setFixPrompt] = useState('')
   const [promptLoading, setPromptLoading] = useState(false)
@@ -167,11 +169,15 @@ export default function PreviewWindow({ projectId }) {
             {bothRunning || anyFailed ? <span className="px-dot" /> : <span className="px-spinner" style={{ width: 12, height: 12 }} />}
             {badge.text}
           </span>
-          <div className="px-segmented" role="group" aria-label="Device">
-            {[['both', 'Both'], ['desktop', 'Desktop'], ['phone', 'Phone']].map(([v, label]) => (
-              <button key={v} type="button" aria-pressed={device === v} onClick={() => setDevice(v)}>{label}</button>
-            ))}
-          </div>
+          {lockedDevice ? (
+            <span className="px-badge px-badge-neutral">{lockedDevice === 'phone' ? 'Mobile app · phone view' : 'Web app · desktop view'}</span>
+          ) : (
+            <div className="px-segmented" role="group" aria-label="Device">
+              {[['both', 'Both'], ['desktop', 'Desktop'], ['phone', 'Phone']].map(([v, label]) => (
+                <button key={v} type="button" aria-pressed={device === v} onClick={() => setDevice(v)}>{label}</button>
+              ))}
+            </div>
+          )}
           <span className="px-small" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 999, background: 'var(--accent-soft)', color: 'var(--accent-text)', border: '1px solid var(--accent-text)', fontWeight: 500 }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2.1-.1-2.9a2.2 2.2 0 0 0-2.9-.1zM12 15l-3-3a22 22 0 0 1 2-3.9A12.9 12.9 0 0 1 22 2c0 2.7-.8 7.5-6 11a22.4 22.4 0 0 1-4 2z" /></svg>
             Like the preview? Go back to <b>ProtoTest</b> and click <b>Deploy</b>

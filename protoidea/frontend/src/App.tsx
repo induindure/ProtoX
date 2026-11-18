@@ -108,6 +108,7 @@ export default function App() {
       features: finalIdea.features,
       tech_hints: finalIdea.tech_hints,
       target_users: finalIdea.target_users,
+      app_type: currentResult?.app_type || 'Web App',
     }))
     window.open(withTheme(`${MODULE_URLS.code}?idea=${encoded}`), '_blank')
   }
