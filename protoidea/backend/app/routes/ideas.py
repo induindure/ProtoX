@@ -75,7 +75,7 @@ async def generate_ideas(
             domain=request.domain,
             app_type=request.app_type,
             constraints=request.constraints,
-            ideas=[ri.idea.model_dump() for ri in ranked_ideas],
+            ideas=[ri.model_dump() for ri in ranked_ideas],
         )
         db.add(record)
         db.commit()
@@ -140,11 +140,12 @@ def get_history(
                 record_id=str(r.id),
                 domain=r.domain,
                 app_type=r.app_type,
-                ideas=r.ideas,
+                ideas=[x if "idea" in x else {"idea": x, "scores": {"total": 0, "feasibility": 0, "novelty": 0, "market_fit": 0}} for x in r.ideas],
             )
             for r in records
         ])
-    except Exception:
+    except Exception as e:
+        print("HISTORY FAILED:", repr(e))
         return IdeaListResponse(records=[])
 
 

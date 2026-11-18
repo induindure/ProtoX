@@ -8,6 +8,7 @@ import IdeaForm from './components/IdeaForm'
 import IdeaCard from './components/IdeaCard'
 import IdeaRefinement from './components/IdeaRefinement'
 import UserMenu from './components/auth/UserMenu'
+import HistoryPanel from './components/HistoryPanel'
 
 import { generateIdeas, refineIdea } from './api/ideas'
 import type { RankedIdea, IdeaRequest, IdeaResponse, IdeaModel } from './types'
@@ -113,6 +114,13 @@ export default function App() {
     window.open(withTheme(`${MODULE_URLS.code}?idea=${encoded}`), '_blank')
   }
 
+  const handleLoadHistory = (record: IdeaResponse) => {
+    setCurrentResult(record)
+    setSelectedIdea(null)
+    setRefiningIdea(null)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   return (
     <div className="px-page">
       <Header current={1}>
@@ -124,6 +132,7 @@ export default function App() {
       <main className="px-container px-split" style={{ paddingTop: 24 }}>
         <aside className="px-card px-card-flush px-sticky">
           <IdeaForm onSubmit={mutation.mutate} loading={mutation.isPending} />
+          <HistoryPanel onLoad={handleLoadHistory} />
         </aside>
 
         <section style={{ minWidth: 0 }}>
