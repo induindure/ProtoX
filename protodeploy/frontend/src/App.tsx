@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { deployProject, getBuildStatus, type DeployResult } from "./api";
 import GithubTokenGuide from "./components/GithubTokenGuide";
 import Header, { Hero, CheckIcon } from "./protox/Header";
+import { deployProject, getBuildStatus, getBackendStatus, type DeployResult } from "./api";
+import RenderGuide from "./components/RenderGuide";
 
 export default function App() {
   const [file, setFile] = useState<File | null>(null);
@@ -10,29 +11,54 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<DeployResult | null>(null);
-  const [build, setBuild] = useState("starting");
+    const [build, setBuild] = useState("starting");
+  const [backendLive, setBackendLive] = useState(false);
+  const [copied, setCopied] = useState(false);
   const timer = useRef<number | null>(null);
+  const backendTimer = useRef<number | null>(null);
 
-  useEffect(() => () => { if (timer.current) clearInterval(timer.current); }, []);
+  const stopTimers = () => {
+    if (timer.current) clearInterval(timer.current);
+    if (backendTimer.current) clearInterval(backendTimer.current);
+    timer.current = null;
+    backendTimer.current = null;
+  };
 
-  const startPolling = (owner: string, name: string) => {
+  useEffect(() => stopTimers, []);
+
+  const startPolling = (owner: string, name: string, backendUrl: string) => {
     timer.current = window.setInterval(async () => {
-      const s = await getBuildStatus(owner, name);
-      setBuild(s.conclusion ?? s.status);
-      if (s.conclusion && timer.current) clearInterval(timer.current);
+      try {
+        const s = await getBuildStatus(owner, name);
+        setBuild(s.conclusion ?? s.status);
+        if (s.conclusion && timer.current) clearInterval(timer.current);
+      } catch { /* try again next tick */ }
     }, 5000);
+
+    backendTimer.current = window.setInterval(async () => {
+      try {
+        const b = await getBackendStatus(backendUrl);
+        if (b.live) {
+          setBackendLive(true);
+          if (backendTimer.current) clearInterval(backendTimer.current);
+        }
+      } catch { /* try again next tick */ }
+    }, 8000);
   };
 
   const handleDeploy = async () => {
     if (!file) return;
+    stopTimers();
     setLoading(true);
     setError("");
     setResult(null);
     setBuild("starting");
+    setBackendLive(false);
+    setCopied(false);
     try {
       const r = await deployProject(file, token, repo);
       setResult(r);
-      startPolling(r.owner, r.repo);
+      startPolling(r.owner, r.repo, r.backend_url);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -67,26 +93,35 @@ export default function App() {
         ? <>Status: {build.replace("_", " ")} · <a href={result.actions_url} target="_blank" rel="noreferrer" style={{ color: "var(--accent-text)" }}>build logs ↗</a></>
         : "GitHub Actions builds and publishes it to GitHub Pages.",
     },
-    {
+        {
       title: "Backend on Render",
-      state: "todo",
-      body: result ? <>One click to finish. It will run at {result.backend_url}</> : "You confirm it on Render with one click.",
-    },
-    {
-      title: "Live link",
-      state: buildDone ? "done" : "todo",
-      body: buildDone && result
-        ? <a href={result.frontend_url} target="_blank" rel="noreferrer" style={{ wordBreak: "break-all", color: "var(--accent-text)" }}>{result.frontend_url}</a>
-        : "Appears here when the build finishes.",
+      state: !result ? "todo" : backendLive ? "done" : "active",
+      body: !result
+        ? "You confirm it on Render with one click."
+        : backendLive
+          ? <>Live at <a href={result.backend_url} target="_blank" rel="noreferrer" style={{ wordBreak: "break-all", color: "var(--accent-text)" }}>{result.backend_url}</a></>
+          : <>Click <b>Deploy backend on Render</b> below. This ticks by itself once {result.backend_url} is live.</>,
     },
   ];
-  const phase = buildDone
+  const allDone = !!result && buildDone && backendLive;
+  const phase = allDone
     ? { cls: "px-badge-ok", label: "Live" }
     : buildFailed
       ? { cls: "px-badge-err", label: "Build failed" }
       : result || loading
         ? { cls: "px-badge-accent", label: "In progress" }
         : { cls: "px-badge-neutral", label: "Not started" };
+
+  const apiName = result ? result.backend_url.replace("https://", "").split(".")[0] : "";
+
+  const handleCopy = async () => {
+    if (!result) return;
+    try {
+      await navigator.clipboard.writeText(result.frontend_url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard blocked */ }
+  };
 
   return (
     <div className="px-page">
@@ -190,7 +225,38 @@ export default function App() {
             {result && (
               <div className="px-stack" style={{ gap: 8, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
                 <a href={result.backend_deploy_url} target="_blank" rel="noreferrer" className="px-btn px-btn-cta">Deploy backend on Render ↗</a>
-                <a href={result.frontend_url} target="_blank" rel="noreferrer" className="px-btn">Open live site ↗</a>
+                <RenderGuide apiName={apiName} repo={result.repo} />
+
+                {allDone && (
+                  <div style={{ marginTop: 6 }}>
+                    <p style={{ margin: "0 0 2px", fontWeight: 700 }}>Share your app</p>
+                    <p className="px-small" style={{ margin: "0 0 8px", color: "var(--muted)" }}>Copy this link and send it to anyone</p>
+                    <div style={{ position: "relative" }}>
+                      <input
+                        readOnly
+                        value={result.frontend_url}
+                        onFocus={(e) => e.target.select()}
+                        className="px-input px-input-mono"
+                        style={{ width: "100%", paddingRight: 92 }}
+                        aria-label="Live site link"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleCopy}
+                        className="px-btn"
+                        style={{ position: "absolute", right: 5, top: "50%", transform: "translateY(-50%)", padding: "4px 12px", minHeight: 0 }}
+                      >
+                        {copied ? "Copied" : "Copy"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {allDone ? (
+                  <a href={result.frontend_url} target="_blank" rel="noreferrer" className="px-btn">Open live site ↗</a>
+                ) : (
+                  <button type="button" className="px-btn" disabled title="Available after all 3 steps are done">Open live site ↗</button>
+                )}
               </div>
             )}
           </section>

@@ -2,7 +2,7 @@ import shutil
 import requests
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
-from .deployer import deploy_to_github, GH
+from .deployer import deploy_to_github, GH, check_backend_live
 from .extractor import extract_project
 
 router = APIRouter(prefix="/api/protodeploy", tags=["protodeploy"])
@@ -32,3 +32,7 @@ def status(owner: str, repo: str):
     if not runs:
         return {"status": "queued", "conclusion": None}
     return {"status": runs[0]["status"], "conclusion": runs[0]["conclusion"]}
+
+@router.get("/backend-status")
+def backend_status(url: str):
+    return {"live": check_backend_live(url)}

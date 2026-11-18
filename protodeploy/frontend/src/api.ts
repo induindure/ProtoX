@@ -36,3 +36,10 @@ export async function getBuildStatus(owner: string, repo: string) {
   );
   return res.json() as Promise<{ status: string; conclusion: string | null }>;
 }
+
+export async function getBackendStatus(url: string) {
+  const res = await fetch(
+    `${API}/api/protodeploy/backend-status?url=${encodeURIComponent(url)}`
+  );
+  return res.json() as Promise<{ live: boolean }>;
+}

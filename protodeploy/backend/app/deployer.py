@@ -94,3 +94,16 @@ def deploy_to_github(project_dir: Path, token: str, repo_name: str) -> dict:
         "backend_url": api_url,
         "actions_url": f"{repo_url}/actions",
     }
+
+def check_backend_live(url: str) -> bool:
+    # only allow Render URLs so this can't be used to hit arbitrary sites
+    if not re.fullmatch(r"https://[a-z0-9-]+\.onrender\.com", url):
+        return False
+    try:
+        r = requests.get(url, timeout=10, allow_redirects=False)
+    except requests.RequestException:
+        return False
+    # Render sends this header when no service exists at that URL yet
+    if r.headers.get("x-render-routing") == "no-server":
+        return False
+    return r.status_code not in (502, 503, 504)
