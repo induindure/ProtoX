@@ -172,6 +172,10 @@ export default function PreviewWindow({ projectId }) {
               <button key={v} type="button" aria-pressed={device === v} onClick={() => setDevice(v)}>{label}</button>
             ))}
           </div>
+          <span className="px-small" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 999, background: 'var(--accent-soft)', color: 'var(--accent-text)', border: '1px solid var(--accent-text)', fontWeight: 500 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2.1-.1-2.9a2.2 2.2 0 0 0-2.9-.1zM12 15l-3-3a22 22 0 0 1 2-3.9A12.9 12.9 0 0 1 22 2c0 2.7-.8 7.5-6 11a22.4 22.4 0 0 1-4 2z" /></svg>
+            Like the preview? Go back to <b>ProtoTest</b> and click <b>Deploy</b>
+          </span>
         </div>
         <div className="px-row" style={{ gap: 8 }}>
           <button className="px-btn px-btn-sm" onClick={() => setShowLogs(s => !s)} aria-expanded={showLogs}>
