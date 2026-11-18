@@ -81,8 +81,9 @@ async def generate_ideas(
         db.commit()
         db.refresh(record)
         record_id = str(record.id)
-    except Exception:
+    except Exception as e:
         db.rollback()
+        print("IDEA SAVE FAILED:", repr(e))
         record_id = "db-unavailable"
 
     return IdeaResponse(
