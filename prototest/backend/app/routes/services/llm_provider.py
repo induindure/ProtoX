@@ -8,6 +8,8 @@ import os
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_groq import ChatGroq
 
+from app.routes.services.secret_guard import mask_secrets
+
 
 def get_llm(max_tokens: int = 8000, temperature: float = 0.3):
     groq = ChatGroq(
@@ -52,6 +54,9 @@ def complete(system_prompt: str, user_prompt: str, max_tokens: int = 8000) -> st
     """Ask the AI with a system + user prompt; returns plain text."""
     est_input = (len(system_prompt) + len(user_prompt)) // 3
     print(f"LLM CALL: est_input~{est_input} tokens, max_tokens={max_tokens}", flush=True)
+    # Secrets never go to the AI: mask passwords in URLs and secret KEY=value lines.
+    system_prompt = mask_secrets(system_prompt)
+    user_prompt = mask_secrets(user_prompt)
     llm = get_llm(max_tokens=max_tokens)
     response = llm.invoke([
         SystemMessage(content=system_prompt),

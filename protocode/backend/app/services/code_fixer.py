@@ -11,6 +11,7 @@ from langchain_groq import ChatGroq
 
 from app.services.completeness_checker import _norm
 from app.services.llm_provider import get_llm, message_text, parse_json_loose
+from app.services.secret_guard import safe_files, mask_secrets, restore_secrets, is_env_file
 
 import json_repair
 
@@ -43,6 +44,10 @@ def _llm():
 
 
 def fix_code(error_log: str, files: list[dict], all_paths: list[str], tech_stack: str = "") -> dict:
+    # Secrets never go to the AI: drop .env files, mask passwords and keys.
+    originals = {_norm(f["path"]): f.get("content", "") for f in files}
+    files = safe_files(files)
+    error_log = mask_secrets(error_log)
     context = "\n\n".join(
         f"### {_norm(f['path'])}\n{f['content']}" for f in files
     )
@@ -66,8 +71,10 @@ def fix_code(error_log: str, files: list[dict], all_paths: list[str], tech_stack
     fixed = []
     for f in data.get("files", []):
         path = _norm(f.get("path", ""))
+        if is_env_file(path):
+            continue  # the AI may not touch .env files
         if path.startswith(("backend/", "frontend/")) and f.get("content"):
-            fixed.append({"path": path, "content": f["content"]})
+            fixed.append({"path": path, "content": restore_secrets(f["content"], originals.get(path))})
 
     print(f"[code-fixer] {data.get('explanation', '')} -> {[f['path'] for f in fixed]}")
     return {"explanation": data.get("explanation", ""), "files": fixed}

@@ -8,6 +8,7 @@ from app.services.dependency_scanner import build_requirements_txt
 from app.services.typing_fixer import fix_missing_typing_imports
 from app.services.pydantic_fixer import fix_pydantic_v2_settings_import
 from app.services.env_builder import apply_database_url
+from urllib.parse import urlsplit
 from app.services.import_fixer import fix_relative_imports
 from app.services.completeness_checker import fill_missing_files
 from app.services.frontend_checker import fill_missing_frontend_exports
@@ -86,8 +87,8 @@ NO PLACEHOLDER CONTENT (mandatory):
 Configuration and secrets:
 - Never hardcode secrets or connection strings in code. Read them from environment variables.
 - Read the database connection string from DATABASE_URL and the server port from PORT.
-- If a Database URL is given in the user message, put it ONLY in a backend/.env file
-  (DATABASE_URL=...). .env.example must contain placeholder values only.
+- You are never given the real database URL. ProtoX writes it into backend/.env itself.
+  Do not create .env files. .env.example must contain placeholder values only.
 - Every setting must have a safe default so the app starts without a .env file
   (e.g. SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-change-me") in Django,
   a default value on the Settings field in FastAPI, process.env.X || "default" in Express).
@@ -386,9 +387,11 @@ async def generate_code(
     user_content = f"App idea:\n{idea}\n\nTech stack: {tech_stack}"
 
     if database_url:
+        # Only the database TYPE goes to the AI, never the URL or password.
+        db_type = urlsplit(database_url).scheme or "postgresql"
         user_content += (
-            f"\n\nDatabase URL to use exactly as given "
-            f"(do not invent a different one): {database_url}"
+            f"\n\nDatabase type: {db_type}. The real connection string is provided "
+            f"at runtime in the DATABASE_URL environment variable."
         )
 
     messages = [

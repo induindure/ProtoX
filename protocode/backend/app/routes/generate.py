@@ -6,6 +6,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from app.services.code_generator import generate_code
 from app.services.code_fixer import fix_code, _llm, message_text, parse_json_loose
 from app.services.database_url_validator import validate_database_url
+from app.services.secret_guard import is_env_file
 
 router = APIRouter()
 
@@ -107,6 +108,7 @@ def chat_edit(req: ChatEditRequest):
     clean = [
         {"path": str(f.get("path", "")), "content": _text(f.get("content"))}
         for f in req.files
+        if not is_env_file(str(f.get("path", "")))  # .env never goes to the AI
     ]
     by_path = {f["path"]: f for f in clean}
 
